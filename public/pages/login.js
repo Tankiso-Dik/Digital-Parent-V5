@@ -150,6 +150,39 @@ export async function render(container) {
     })
     .catch(() => {});
 
+  // Fake "Create account" button for school project
+  const card = container.querySelector('.login-card');
+  const createAccountDivider = document.createElement('div');
+  createAccountDivider.className = 'login-divider';
+  createAccountDivider.textContent = 'or';
+
+  const createAccountBtn = document.createElement('button');
+  createAccountBtn.type = 'button';
+  createAccountBtn.className = 'btn btn--secondary login-form__submit';
+  createAccountBtn.textContent = 'Create account';
+  
+  createAccountBtn.addEventListener('click', async () => {
+    errorEl.hidden = true;
+    const originalText = createAccountBtn.textContent;
+    createAccountBtn.textContent = 'Loading...';
+    createAccountBtn.disabled = true;
+    
+    try {
+      // IMPORTANT: Replace these with your actual admin credentials!
+      const result = await auth.login('admin', 'password123');
+      sessionStorage.setItem('oikos:settings:tab', 'family');
+      window.oikos.navigate('/settings', result.user);
+    } catch (err) {
+      showError(errorEl, 'Setup required: Update ADMIN_USER and ADMIN_PASS in public/pages/login.js');
+    } finally {
+      createAccountBtn.textContent = originalText;
+      createAccountBtn.disabled = false;
+    }
+  });
+
+  card.appendChild(createAccountDivider);
+  card.appendChild(createAccountBtn);
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.hidden = true;

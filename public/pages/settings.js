@@ -269,18 +269,19 @@ export async function render(container, { user }) {
     'account',
     ...(user?.role === 'admin' ? ['backup'] : []),
   ];
-  const storedTab = sessionStorage.getItem(SETTINGS_TAB_KEY) ?? 'general';
+  const storedTab = sessionStorage.getItem(SETTINGS_TAB_KEY) ?? (user?.role === 'admin' ? 'family' : 'general');
   const activeTab = (syncOk || syncErr)
     ? 'sync'
-    : (allowedTabs.includes(storedTab) ? storedTab : 'general');
+    : (allowedTabs.includes(storedTab) ? storedTab : (user?.role === 'admin' ? 'family' : 'general'));
 
   const panelHidden = (id) => id === activeTab ? '' : ' hidden';
 
   container.replaceChildren();
   container.insertAdjacentHTML('beforeend', `
     <div class="page settings-page">
-      <div class="page__header">
-        <h1 class="page__title">${t('settings.title')}</h1>
+      <div class="page__header" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <h1 class="page__title">${activeTab === 'family' ? t('settings.sectionFamily') : t('settings.title')}</h1>
+        ${user?.role === 'admin' ? `<button type="button" class="btn btn--secondary btn--sm" id="toggle-advanced-settings" ${activeTab !== 'family' ? 'hidden' : ''}>${t('nav.settings')}</button>` : ''}
       </div>
 
       ${syncOk  ? `<div class="settings-banner settings-banner--success">${syncOk === 'google' ? t('settings.syncSuccessGoogle') : t('settings.syncSuccessApple')}</div>` : ''}
@@ -1153,7 +1154,7 @@ function buildSettingsTabs(user) {
   const tabs = [
     { id: 'general',    label: t('settings.tabGeneral'),    icon: 'settings'       },
     // { id: 'meals',      label: t('settings.tabMeals'),      icon: 'utensils'       },
-    { id: 'budget',     label: t('settings.tabBudget'),     icon: 'wallet'         },
+    // { id: 'budget',     label: t('settings.tabBudget'),     icon: 'wallet'         },
     // { id: 'shopping',   label: t('settings.tabShopping'),   icon: 'shopping-cart'  },
     // { id: 'sync',       label: t('settings.tabSync'),       icon: 'refresh-cw',    separatorBefore: true },
     { id: 'account',    label: t('settings.tabAccount'),    icon: 'user',          separatorBefore: true },
@@ -1176,7 +1177,7 @@ function renderSettingsSubTabs(container, user, activeTab) {
   const anchor     = lastBanner ?? settingsPage.querySelector('.page__header');
   if (!anchor) return;
 
-  renderSubTabs(anchor, {
+  const subTabs = renderSubTabs(anchor, {
     tabs:           buildSettingsTabs(user),
     activeId:       activeTab,
     storageKey:     SETTINGS_TAB_KEY,
@@ -1187,8 +1188,32 @@ function renderSettingsSubTabs(container, user, activeTab) {
       container.querySelectorAll('[data-panel]').forEach((panel) => {
         panel.hidden = panel.dataset.panel !== tabId;
       });
+      const titleEl = container.querySelector('.page__title');
+      const toggleBtn = container.querySelector('#toggle-advanced-settings');
+      if (tabId === 'family') {
+        if (titleEl) titleEl.textContent = t('settings.sectionFamily');
+        if (toggleBtn) toggleBtn.hidden = false;
+        subTabs.style.display = 'none';
+      } else {
+        if (titleEl) titleEl.textContent = t('settings.title');
+        if (toggleBtn) toggleBtn.hidden = true;
+      }
     },
   });
+
+  if (activeTab === 'family') {
+    subTabs.style.display = 'none';
+  }
+
+  const toggleBtn = container.querySelector('#toggle-advanced-settings');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      subTabs.style.display = 'flex';
+      toggleBtn.hidden = true;
+      const titleEl = container.querySelector('.page__title');
+      if (titleEl) titleEl.textContent = t('settings.title');
+    });
+  }
 }
 
 function bindPwaInstallEvents(container) {

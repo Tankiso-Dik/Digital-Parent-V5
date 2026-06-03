@@ -1029,55 +1029,54 @@ function initOfflineBanner() {
 }
 
 /**
- * Versteckt die Bottom-Nav beim Runterscrollen, zeigt sie beim Hochscrollen.
- * Nur auf Mobile aktiv (< 1024px), da auf Desktop die Sidebar fest sichtbar ist.
+ * Ersetzt das Scroll-Verhalten durch einen permanenten Toggle-Button für die Navigation.
  */
 function initNavHideOnScroll(container) {
   const nav = container.querySelector('.nav-bottom');
   if (!nav) return;
 
-  let lastY = 0;
-  let lastTarget = null;
+  // Navigation standardmäßig ausblenden
+  nav.classList.add('nav-bottom--hidden');
 
-  const setNavHidden = (hidden) => {
-    nav.classList.toggle('nav-bottom--hidden', hidden);
+  // Toggle-Button erstellen
+  const toggleBtn = document.createElement('button');
+  toggleBtn.className = 'btn btn--primary';
+  toggleBtn.style.position = 'fixed';
+  toggleBtn.style.bottom = '1.5rem';
+  toggleBtn.style.right = '1.5rem';
+  toggleBtn.style.zIndex = '9000'; // Über den meisten Dingen, aber unter Modals
+  toggleBtn.style.borderRadius = '50%';
+  toggleBtn.style.width = '3.5rem';
+  toggleBtn.style.height = '3.5rem';
+  toggleBtn.style.display = 'flex';
+  toggleBtn.style.alignItems = 'center';
+  toggleBtn.style.justifyContent = 'center';
+  toggleBtn.style.boxShadow = 'var(--shadow-lg)';
+  toggleBtn.setAttribute('aria-label', t('nav.navigation') || 'Navigation');
+
+  const icon = document.createElement('i');
+  icon.dataset.lucide = 'menu';
+  icon.setAttribute('aria-hidden', 'true');
+  toggleBtn.appendChild(icon);
+
+  toggleBtn.addEventListener('click', () => {
+    const isHidden = nav.classList.toggle('nav-bottom--hidden');
+    icon.dataset.lucide = isHidden ? 'menu' : 'x';
+    if (window.lucide) window.lucide.createIcons({ el: toggleBtn });
+  });
+
+  // Nur auf mobilen Geräten anzeigen (wenn Desktop-Sidebar unsichtbar ist)
+  const updateVisibility = () => {
+    toggleBtn.style.display = window.innerWidth >= 1024 ? 'none' : 'flex';
+    if (window.innerWidth >= 1024) nav.classList.remove('nav-bottom--hidden');
+    else if (icon.dataset.lucide === 'menu') nav.classList.add('nav-bottom--hidden');
   };
 
-  // capture:true catches scroll on any descendant without bubbling.
-  // Accept only the two possible main scroll containers:
-  //   #main-content  — .app-content, used by all pages except Dashboard
-  //   #dashboard-shell — internal scroll container on the Dashboard page
-  document.addEventListener('scroll', (e) => {
-    if (window.innerWidth >= 1024) {
-      setNavHidden(false);
-      return;
-    }
+  window.addEventListener('resize', updateVisibility);
+  updateVisibility();
 
-    // Dashboard is the only mobile page that still hit the scroll-blank compositor path.
-    // Keep the bottom nav stable there; other pages retain auto-hide behavior.
-    if (currentPath === '/') {
-      setNavHidden(false);
-      return;
-    }
-
-    const target = e.target;
-    if (target.id !== 'main-content' && target.id !== 'dashboard-shell') return;
-
-    if (target !== lastTarget) {
-      lastY = target.scrollTop;
-      lastTarget = target;
-    }
-
-    const y = target.scrollTop;
-    if (y < 10) {
-      setNavHidden(false);
-    } else if (y > lastY + 4) {
-      setNavHidden(true);
-    } else if (y < lastY - 4) {
-      setNavHidden(false);
-    }
-    lastY = y;
-  }, { passive: true, capture: true });
+  container.appendChild(toggleBtn);
+  if (window.lucide) window.lucide.createIcons({ el: toggleBtn });
 }
 
 /**
@@ -1287,7 +1286,7 @@ function navItems() {
     { path: '/budget',    label: t('nav.budget'),    icon: 'wallet',           module: 'budget'    },
     { path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' },
     { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'paintbrush', module: 'housekeeping' },
-    { path: '/settings',  label: t('nav.settings'),  icon: 'settings',         module: 'settings'  },
+    { path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  },
     // Kitchen-Gruppe: via Küche-Nav-Button (Bottom-Nav + Sidebar) + kitchen-tabs-bar erreichbar
     // { path: '/meals',     label: t('nav.meals'),     icon: 'utensils',      module: 'meals',    kitchenGroup: true },
     // { path: '/recipes',   label: t('nav.recipes'),   icon: 'book-text',     module: 'recipes',  kitchenGroup: true },
