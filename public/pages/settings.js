@@ -367,38 +367,7 @@ export async function render(container, { user }) {
           </div>
         </section>
 
-        <section class="settings-section">
-          <h2 class="settings-section__title">${t('settings.sectionPwa')}</h2>
-          <div class="settings-card settings-card--pwa settings-pwa-card">
-            <div class="settings-pwa-card__icon">
-              <i data-lucide="smartphone" aria-hidden="true"></i>
-            </div>
-            <div class="settings-pwa-card__body">
-              <h3 class="settings-card__title">${t('settings.pwaInstallTitle')}</h3>
-              <p class="form-hint" id="pwa-install-status" style="margin-bottom:var(--space-3)">${t('settings.pwaInstallChecking')}</p>
-              <div class="settings-form-actions">
-                <button type="button" class="btn btn--primary" id="pwa-install-btn">
-                  <i data-lucide="download" aria-hidden="true"></i>
-                  <span>${t('settings.pwaInstallButton')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        ${user?.role === 'admin' ? `
-        <section class="settings-section">
-          <h2 class="settings-section__title">${t('settings.sectionHousekeeping')}</h2>
-          <div class="settings-card settings-card--housekeeping">
-            <h3 class="settings-card__title">${t('settings.housekeepingPaymentsTitle')}</h3>
-            <p class="form-hint" style="margin-bottom:var(--space-3)">${t('settings.housekeepingPaymentTasksHint')}</p>
-            <label class="toggle-row">
-              <input type="checkbox" id="housekeeping-payment-tasks" ${prefs.housekeeping_payment_tasks ? 'checked' : ''}>
-              <span>${t('settings.housekeepingPaymentTasksLabel')}</span>
-            </label>
-          </div>
-        </section>
-        ` : ''}
 
         ${user?.role === 'admin' ? `
         <section class="settings-section">
@@ -1183,17 +1152,17 @@ async function loadCardDAVAccounts(container, user) {
 function buildSettingsTabs(user) {
   const tabs = [
     { id: 'general',    label: t('settings.tabGeneral'),    icon: 'settings'       },
-    { id: 'meals',      label: t('settings.tabMeals'),      icon: 'utensils'       },
+    // { id: 'meals',      label: t('settings.tabMeals'),      icon: 'utensils'       },
     { id: 'budget',     label: t('settings.tabBudget'),     icon: 'wallet'         },
-    { id: 'shopping',   label: t('settings.tabShopping'),   icon: 'shopping-cart'  },
-    { id: 'sync',       label: t('settings.tabSync'),       icon: 'refresh-cw',    separatorBefore: true },
+    // { id: 'shopping',   label: t('settings.tabShopping'),   icon: 'shopping-cart'  },
+    // { id: 'sync',       label: t('settings.tabSync'),       icon: 'refresh-cw',    separatorBefore: true },
     { id: 'account',    label: t('settings.tabAccount'),    icon: 'user',          separatorBefore: true },
   ];
   if (user?.role === 'admin') {
     tabs.push(
       { id: 'family',     label: t('settings.tabFamily'),    icon: 'users',    separatorBefore: true },
-      { id: 'api-tokens', label: t('settings.tabApiTokens'), icon: 'key'    },
-      { id: 'backup',     label: t('settings.tabBackup'),    icon: 'database' },
+      // { id: 'api-tokens', label: t('settings.tabApiTokens'), icon: 'key'    },
+      // { id: 'backup',     label: t('settings.tabBackup'),    icon: 'database' },
     );
   }
   return tabs;

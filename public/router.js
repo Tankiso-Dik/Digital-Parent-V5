@@ -675,39 +675,40 @@ function renderAppShell(container) {
   let backdrop, moreSheet;
 
   if (!isGuest) {
-    const kitchenBtn = document.createElement('button');
-    kitchenBtn.className = 'nav-item nav-item--kitchen';
-    kitchenBtn.id = 'kitchen-btn';
-    kitchenBtn.type = 'button';
-    kitchenBtn.style.setProperty('--item-module-accent', 'var(--module-meals)');
-    kitchenBtn.setAttribute('aria-label', t('nav.kitchen'));
-    kitchenBtn.setAttribute('title', t('nav.kitchen'));
-    const kitchenBtnWrap = document.createElement('div');
-    kitchenBtnWrap.className = 'nav-item__icon-wrap';
-    const kitchenBtnWell = document.createElement('div');
-    kitchenBtnWell.className = 'nav-item__icon-well';
-    {
-      const iconFactory = NAV_ICONS['utensils'];
-      if (iconFactory) {
-        const svg = iconFactory();
-        svg.classList.add('nav-item__icon');
-        kitchenBtnWell.appendChild(svg);
-      } else {
-        const kitchenBtnIcon = document.createElement('i');
-        kitchenBtnIcon.dataset.lucide = 'utensils';
-        kitchenBtnIcon.className = 'nav-item__icon';
-        kitchenBtnIcon.setAttribute('aria-hidden', 'true');
-        kitchenBtnWell.appendChild(kitchenBtnIcon);
-      }
-    }
-    kitchenBtnWrap.appendChild(kitchenBtnWell);
-    const kitchenBtnLabel = document.createElement('span');
-    kitchenBtnLabel.className = 'nav-item__label';
-    kitchenBtnLabel.textContent = t('nav.kitchen');
-    kitchenBtn.appendChild(kitchenBtnWrap);
-    kitchenBtn.appendChild(kitchenBtnLabel);
-    kitchenBtn.addEventListener('click', () => navigate(getLastKitchenRoute()));
-    bottomItems.appendChild(kitchenBtn);
+//     const kitchenBtn = document.createElement('button');
+//     kitchenBtn.className = 'nav-item nav-item--kitchen';
+//     kitchenBtn.id = 'kitchen-btn';
+//     kitchenBtn.type = 'button';
+//     kitchenBtn.style.setProperty('--item-module-accent', 'var(--module-meals)');
+//     kitchenBtn.setAttribute('aria-label', t('nav.kitchen'));
+//     kitchenBtn.setAttribute('title', t('nav.kitchen'));
+//     const kitchenBtnWrap = document.createElement('div');
+//     kitchenBtnWrap.className = 'nav-item__icon-wrap';
+//     const kitchenBtnWell = document.createElement('div');
+//     kitchenBtnWell.className = 'nav-item__icon-well';
+//     {
+//       const iconFactory = NAV_ICONS['utensils'];
+//       if (iconFactory) {
+//         const svg = iconFactory();
+//         svg.classList.add('nav-item__icon');
+//         kitchenBtnWell.appendChild(svg);
+//       } else {
+//         const kitchenBtnIcon = document.createElement('i');
+//         kitchenBtnIcon.dataset.lucide = 'utensils';
+//         kitchenBtnIcon.className = 'nav-item__icon';
+//         kitchenBtnIcon.setAttribute('aria-hidden', 'true');
+//         kitchenBtnWell.appendChild(kitchenBtnIcon);
+//       }
+//     }
+//     kitchenBtnWrap.appendChild(kitchenBtnWell);
+//     const kitchenBtnLabel = document.createElement('span');
+//     kitchenBtnLabel.className = 'nav-item__label';
+//     kitchenBtnLabel.textContent = t('nav.kitchen');
+//     kitchenBtn.appendChild(kitchenBtnWrap);
+//     kitchenBtn.appendChild(kitchenBtnLabel);
+//     kitchenBtn.addEventListener('click', () => navigate(getLastKitchenRoute()));
+//     bottomItems.appendChild(kitchenBtn);
+
 
     const moreBtn = document.createElement('button');
     moreBtn.className = 'nav-item nav-item--more';
@@ -1288,9 +1289,9 @@ function navItems() {
     { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'paintbrush', module: 'housekeeping' },
     { path: '/settings',  label: t('nav.settings'),  icon: 'settings',         module: 'settings'  },
     // Kitchen-Gruppe: via Küche-Nav-Button (Bottom-Nav + Sidebar) + kitchen-tabs-bar erreichbar
-    { path: '/meals',     label: t('nav.meals'),     icon: 'utensils',      module: 'meals',    kitchenGroup: true },
-    { path: '/recipes',   label: t('nav.recipes'),   icon: 'book-text',     module: 'recipes',  kitchenGroup: true },
-    { path: '/shopping',  label: t('nav.shopping'),  icon: 'shopping-cart', module: 'shopping', kitchenGroup: true },
+    // { path: '/meals',     label: t('nav.meals'),     icon: 'utensils',      module: 'meals',    kitchenGroup: true },
+    // { path: '/recipes',   label: t('nav.recipes'),   icon: 'book-text',     module: 'recipes',  kitchenGroup: true },
+    // { path: '/shopping',  label: t('nav.shopping'),  icon: 'shopping-cart', module: 'shopping', kitchenGroup: true },
   ];
   const thirdPartyItems = _thirdPartyModules
     .filter((module) => module.enabled && module.status === 'enabled' && module.menu?.show && module.route?.path)

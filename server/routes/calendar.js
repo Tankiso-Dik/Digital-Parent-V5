@@ -56,7 +56,7 @@ const VALID_EVENT_ICONS = new Set([
 ]);
 
 function getUserId(req) {
-  const candidates = [req.authUserId, req.user?.id, req.session?.userId];
+  const candidates = [req.authUserId, req.user?.id, (req.authUserId || req.session?.userId)];
   for (const value of candidates) {
     const parsed = Number(value);
     if (Number.isInteger(parsed) && parsed > 0) return parsed;
@@ -672,7 +672,7 @@ router.post('/', (req, res) => {
         authMethod: req.authMethod || null,
         authUserId: req.authUserId || null,
         reqUserId: req.user?.id || null,
-        sessionUserId: req.session?.userId || null,
+        sessionUserId: (req.authUserId || req.session?.userId) || null,
       });
       return res.status(401).json({ error: 'Not authenticated.', code: 401 });
     }

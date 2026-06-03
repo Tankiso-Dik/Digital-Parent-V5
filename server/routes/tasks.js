@@ -198,7 +198,7 @@ router.post('/', (req, res) => {
     const {
       title,
       description     = null,
-      category        = 'Sonstiges',
+      category        = 'misc',
       priority        = 'none',
       start_date      = null,
       due_date        = null,
@@ -228,7 +228,7 @@ router.post('/', (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         title.trim(), description, category, priority,
-        start_date, due_date, due_time, firstUid, req.session.userId, parent_task_id,
+        start_date, due_date, due_time, firstUid, (req.authUserId || req.session?.userId), parent_task_id,
         is_recurring ? 1 : 0, recurrence_rule
       );
       setAssignments(db.get(), result.lastInsertRowid, userIds);
