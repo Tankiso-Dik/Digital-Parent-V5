@@ -3,7 +3,7 @@ import sqlite3
 def update_schema():
     # 1. Update oikos.db directly
     try:
-        conn = import os
+        import os
         db_path = os.path.join(os.path.dirname(__file__), 'data', 'oikos.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
