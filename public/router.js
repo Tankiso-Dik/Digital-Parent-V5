@@ -1269,15 +1269,14 @@ function navItems() {
     
     { path: '/location',  label: 'Location',         icon: 'map-pin',          module: 'location'  },
   ];
+  baseItems.push({ path: '/reports',   label: 'Reports',          icon: 'activity',         module: 'reports'   });
+  baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
+  baseItems.push({ path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' });
+  baseItems.push({ path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  });
+  baseItems.push({ path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' });
+  
   if (isParent) {
-    baseItems.push({ path: '/reports',   label: 'Reports',          icon: 'activity',         module: 'reports'   });
-    baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
-    baseItems.push({ path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' });
-    baseItems.push({ path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  });
-    baseItems.push({ path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' });
     baseItems.push({ path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    });
-  } else {
-    baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
   }
   
   baseItems.push({ path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  });
