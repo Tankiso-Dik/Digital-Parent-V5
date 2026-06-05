@@ -64,7 +64,9 @@
     "section": {
       "household": "Господарство"
     },
-    "reminders": "Нагадування"
+    "reminders": "Нагадування",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Огляд",
@@ -238,7 +240,10 @@
     "bulkSelect": "Масовий вибір",
     "bulkSelectedCount": "Вибрано {{count}}",
     "bulkStatusChanged": "Статус змінено.",
-    "selectTask": "Виберіть завдання"
+    "selectTask": "Виберіть завдання",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Покупки",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Вкладення завантажено для події календаря «{{title}}».",
     "agendaEmpty": "Немає подій у вибраному періоді",
-    "taskChipAriaLabel": "Завдання: {{title}}"
+    "taskChipAriaLabel": "Завдання: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Нотатки",

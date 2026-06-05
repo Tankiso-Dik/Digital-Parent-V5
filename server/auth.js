@@ -298,17 +298,22 @@ function assertAdminWouldRemain(targetUserId, nextRole) {
   return row.count > 0 ? null : 'At least one system admin must remain.';
 }
 
-function updateUserRoleSessions(userId, role) {
+function updateUserRoleSessions(userId, role, familyRole) {
   const allSessions = db.get().prepare('SELECT sid, sess FROM sessions').all();
   const updateSession = db.get().prepare('UPDATE sessions SET sess = ? WHERE sid = ?');
+  const deleteSession = db.get().prepare('DELETE FROM sessions WHERE sid = ?');
   for (const row of allSessions) {
     try {
       const sess = JSON.parse(row.sess);
       if (sess.userId === userId) {
-        sess.role = role;
+        if (role !== undefined) sess.role = role;
+        if (familyRole !== undefined) sess.family_role = familyRole;
         updateSession.run(JSON.stringify(sess), row.sid);
       }
-    } catch { /* ignore malformed session */ }
+    } catch {
+      // If the session JSON is malformed, destroy it to prevent security/logic gaps
+      deleteSession.run(row.sid);
+    }
   }
 }
 
@@ -365,19 +370,31 @@ function requireAuth(req, res, next) {
     req.authMethod = 'session';
     req.authUserId = req.session.userId;
     req.authRole = req.session.role;
+    req.authFamilyRole = req.session.family_role;
     return next();
   }
   res.status(401).json({ error: 'Not authenticated.', code: 401 });
 }
 
 /**
- * Prüft ob der authentifizierte User Admin-Rolle hat.
+ * Prüft ob der authentifizierte User Admin-Rolle hat (System Administrator).
  */
 function requireAdmin(req, res, next) {
   if (req.authRole === 'admin') {
     return next();
   }
-  res.status(403).json({ error: 'Permission denied.', code: 403 });
+  res.status(403).json({ error: 'Permission denied. Admin required.', code: 403 });
+}
+
+/**
+ * Prüft ob der authentifizierte User Eltern-Rolle oder Admin-Rolle hat (Family Manager).
+ */
+function requireParent(req, res, next) {
+  const isParent = req.authRole === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole);
+  if (isParent) {
+    return next();
+  }
+  res.status(403).json({ error: 'Permission denied. Parent required.', code: 403 });
 }
 
 /**
@@ -394,6 +411,7 @@ function setupAuthSession(req, res, user) {
       if (err) return reject(err);
       req.session.userId    = user.id;
       req.session.role      = user.role;
+      req.session.family_role = user.family_role;
       req.session.csrfToken = generateToken();
       res.cookie('csrf-token', req.session.csrfToken, {
         httpOnly: false,
@@ -439,8 +457,8 @@ export function findOrCreateOidcUser(database, claims) {
 
   // oidc_provider = Issuer-URL (zukunftssicher für mehrere Provider)
   const result = database.prepare(`
-    INSERT INTO users (username, display_name, password_hash, avatar_color, role, oidc_sub, oidc_provider)
-    VALUES (?, ?, '$oidc$', ?, 'member', ?, ?)
+    INSERT INTO users (username, display_name, password_hash, avatar_color, role, family_role, oidc_sub, oidc_provider)
+    VALUES (?, ?, '$oidc$', ?, 'member', 'child', ?, ?)
   `).run(username, display_name, avatar_color, sub, process.env.OIDC_ISSUER ?? null);
 
   return database.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
@@ -827,7 +845,7 @@ router.delete('/api-tokens/:id', requireAuth, requireAdmin, csrfMiddleware, (req
  * Body: { username, display_name, password, avatar_color?, family_role?, system_admin? }
  * Response: { user: { id, username, display_name, avatar_color, role } }
  */
-router.post('/users', requireAuth, requireAdmin, csrfMiddleware, async (req, res) => {
+router.post('/users', requireAuth, requireParent, csrfMiddleware, async (req, res) => {
   try {
     const {
       username,
@@ -907,7 +925,7 @@ router.post('/users', requireAuth, requireAdmin, csrfMiddleware, async (req, res
  * PATCH /api/v1/auth/users/:id
  * Admin only. Updates a family member profile and system-admin flag.
  */
-router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, async (req, res) => {
+router.patch('/users/:id', requireAuth, requireParent, csrfMiddleware, async (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10);
     if (!Number.isFinite(userId)) return res.status(400).json({ error: 'Invalid user ID.', code: 400 });
@@ -966,9 +984,12 @@ router.patch('/users/:id', requireAuth, requireAdmin, csrfMiddleware, async (req
       });
     });
 
-    if (nextRole !== existing.role) {
-      updateUserRoleSessions(userId, nextRole);
-      if (userId === req.authUserId && req.session) req.session.role = nextRole;
+    if (nextRole !== existing.role || familyRole !== existing.family_role) {
+      updateUserRoleSessions(userId, nextRole, familyRole);
+      if (userId === req.authUserId && req.session) {
+        req.session.role = nextRole;
+        req.session.family_role = familyRole;
+      }
     }
 
     const updated = db.get().prepare(`SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE id = ?`).get(userId);
@@ -1084,7 +1105,7 @@ router.patch('/me/password', requireAuth, csrfMiddleware, async (req, res) => {
  * Admin only. Löscht ein Familienmitglied.
  * Response: { ok: true }
  */
-router.delete('/users/:id', requireAuth, requireAdmin, csrfMiddleware, (req, res) => {
+router.delete('/users/:id', requireAuth, requireParent, csrfMiddleware, (req, res) => {
   try {
     const userId = parseInt(req.params.id, 10);
 
@@ -1120,4 +1141,4 @@ router.delete('/users/:id', requireAuth, requireAdmin, csrfMiddleware, (req, res
   }
 });
 
-export { router, sessionMiddleware, requireAuth, requireAdmin, syncFamilyMemberArtifacts, normalizeAvatarData };
+export { router, sessionMiddleware, requireAuth, requireAdmin, requireParent, syncFamilyMemberArtifacts, normalizeAvatarData };

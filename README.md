@@ -1,60 +1,31 @@
 <div align="center">
-  <img src="docs/logo.svg" alt="Oikos" width="96" />
+  <img src="docs/logo.svg" alt="Digital Parent V4" width="96" />
 
-  <h1>Oikos</h1>
-  <p><strong>The self-hosted family planner. Private, offline-capable, and beautiful.</strong></p>
+  <h1>Digital Parent V4</h1>
+  <p><strong>The complete, private family management system. From chores to screen time, organized.</strong></p>
 
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License"></a>
-  <a href="https://github.com/ulsklyc/oikos/releases"><img src="https://img.shields.io/github/v/release/ulsklyc/oikos?style=flat-square&color=007AFF&label=release" alt="Latest Release"></a>
-  <a href="https://github.com/ulsklyc/oikos/pkgs/container/oikos"><img src="https://img.shields.io/badge/ghcr.io-oikos-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Image"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js"></a>
-  <a href="https://github.com/ulsklyc/oikos/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome"></a>
-
-  <p>
-    <a href="docs/installation.md"><strong>→ Install</strong></a> &nbsp;·&nbsp;
-    <a href="https://ulsklyc.github.io/oikos/"><strong>Screenshots</strong></a> &nbsp;·&nbsp;
-    <a href="docs/SPEC.md"><strong>Docs</strong></a>
-  </p>
 </div>
 
 <br>
 
-<div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark-desktop.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dashboard-light-desktop.png">
-    <img src="docs/screenshots/dashboard-light-desktop.png" alt="Oikos Dashboard" width="800">
-  </picture>
-  <br>
-  <sub>Toggle GitHub light/dark mode to see both themes &nbsp;·&nbsp; <a href="https://ulsklyc.github.io/oikos/">View all screenshots</a></sub>
-</div>
-
-<br>
-
-Oikos is a self-hosted web app that keeps your household organized — tasks, groceries, meals, calendar, budget, and more — in one private place, without cloud accounts or subscriptions. Runs as a Docker or Podman container on any home server or NAS — including rootless Podman on SELinux-enabled RHEL/Fedora/CentOS Stream. Accessible on every device with a polished mobile-first PWA interface.
-
-Each module is independent. Use what fits, skip what doesn't.
+Digital Parent V4 is a comprehensive web app designed to help parents manage chores, distribute digital rewards, and track their children's activities and locations—all from a single, beautifully designed dashboard.
 
 ---
 
-## Modules
+## Key Features
 
 | | |
 |---|---|
-| **Tasks** | Shared tasks with deadlines, priorities, subtasks, recurring schedules, multi-member assignment, Kanban, and mobile-friendly bulk controls. |
-| **Shopping** | Collaborative lists organized by aisle. Touch-safe quick add, swipe gestures, and meal-plan import in one click. |
-| **Meals** | Weekly drag-and-drop planner with direct export to your shopping list. |
-| **Recipes** | Create, duplicate, and scale recipes. Pre-fill meal slots or save any meal as a recipe. |
-| **Calendar** | Google Calendar (OAuth) and CalDAV sync (iCloud, Nextcloud, Radicale). ICS subscriptions, recurring events, file attachments, and readable month/agenda views. |
-| **Documents** | Upload and organize family files. Folders, tags, per-document visibility, drag-and-drop. |
-| **Budget** | Income, expenses, recurring entries, trends, CSV export. Split Expenses for shared costs with automatic debt simplification. |
-| **Housekeeping** | Manage household staff — schedules, check-in/out, payments, chores, supply requests. |
-| **Notes & Contacts** | Colored sticky notes with Markdown. Contact directory with CardDAV sync. |
-| **Birthdays** | Birthday tracker with automatic calendar events, age display, and custom reminders. |
-| **Family** | Member profiles with roles, photos, phone, email, and birthday — synced to Contacts and Birthdays. |
-| **Reminders** | Time-based notifications on tasks and calendar events with in-app badge. |
-| **API Tokens** | Named Bearer / X-API-Key tokens for integrations. OpenAPI 3.0 spec included. |
-| **Backup** | Manual and scheduled database backup and restore, with automatic pre-restore rollback. |
+| **Role-Based Dashboards** | Distinct Parent and Child views. Parents get a control center, children get a gamified progress dashboard. |
+| **Rewards Economy** | Children earn points by completing Chores or Study blocks. They can spend these points to unlock real-world screen time or app access. |
+| **Streak Achievements** | Built-in gamification tracks daily streaks for positive reinforcement. Earning points feels rewarding! |
+| **Weekly Digests** | Parents receive a weekly summary of their family's digital and physical activity (Chores completed, average screen time, danger zone alerts). |
+| **Onboarding Wizard** | A sleek, guided setup flow for parents to quickly onboard children, set up devices, and configure screen time rules. |
+| **Medication Tracking** | Integrated into the Daily Plan, allowing parents to securely track safety-critical routines that children cannot accidentally delete. |
+| **Interactive Geofencing** | Monitor danger zones and safe areas via an integrated Leaflet map with simulated real-time updates. |
+| **Calendar & Tasks** | Full household management including shared tasks, routine planners, and calendar events. |
 
 ---
 

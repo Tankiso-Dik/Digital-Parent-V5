@@ -64,7 +64,9 @@
     "section": {
       "household": "Хозяйство"
     },
-    "reminders": "Напоминания"
+    "reminders": "Напоминания",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Обзор",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Покупки",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Вложение загружено для события календаря «{{title}}».",
     "agendaEmpty": "Нет событий в выбранном периоде",
-    "taskChipAriaLabel": "Задача: {{title}}"
+    "taskChipAriaLabel": "Задача: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Заметки",

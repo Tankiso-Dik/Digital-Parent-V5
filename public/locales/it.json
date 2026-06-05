@@ -64,7 +64,9 @@
     "section": {
       "household": "Casa"
     },
-    "reminders": "Promemoria"
+    "reminders": "Promemoria",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Panoramica",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Spesa",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Allegato caricato per l’evento calendario \"{{title}}\".",
     "agendaEmpty": "Nessun evento nell'intervallo selezionato",
-    "taskChipAriaLabel": "Attività: {{title}}"
+    "taskChipAriaLabel": "Attività: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Bacheca",

@@ -64,7 +64,9 @@
     "section": {
       "household": "家庭"
     },
-    "reminders": "リマインダー"
+    "reminders": "リマインダー",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "ダッシュボード",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "買い物",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "カレンダー予定「{{title}}」にアップロードされた添付ファイル。",
     "agendaEmpty": "選択した期間に予定はありません",
-    "taskChipAriaLabel": "タスク: {{title}}"
+    "taskChipAriaLabel": "タスク: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "メモボード",

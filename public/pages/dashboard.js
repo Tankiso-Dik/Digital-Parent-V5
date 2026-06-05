@@ -1,1487 +1,319 @@
-/**
- * Modul: Dashboard
- * Zweck: Startseite mit Begrüßung, Terminen, Aufgaben, Essen, Notizen und FAB
- * Abhängigkeiten: /api.js
- */
-
-import { api } from '/api.js';
-import { t, formatDate, formatTime, getLocale } from '/i18n.js';
-import { esc, fmtLocation, renderMarkdownLight } from '/utils/html.js';
-import { openModal, closeModal } from '/components/modal.js';
-
-// Hält den AbortController des aktuellen FAB-Listeners - wird bei jedem render() erneuert.
-let _fabController = null;
-
-// ── Onboarding ──────────────────────────────────────────────────────────────
-
-const ONBOARDING_KEY = 'oikos-onboarded';
-const APP_NAME_STORAGE_KEY = 'oikos-app-name';
-
-function getAppName() {
-  return localStorage.getItem(APP_NAME_STORAGE_KEY) || 'Digital Parent';
-}
-
-function getOnboardingSteps() {
-  const appName = getAppName();
-  return [
-    { icon: 'home',         title: t('onboarding.step1Title', { name: appName }), body: t('onboarding.step1Body') },
-    { icon: 'navigation',   title: t('onboarding.step2Title'), body: t('onboarding.step2Body') },
-    { icon: 'plus-circle',  title: t('onboarding.step3Title'), body: t('onboarding.step3Body') },
-  ];
-}
-
-function showOnboarding(appContainer) {
-  const steps = getOnboardingSteps();
-  let current = 0;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'onboarding-overlay';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-
-  const closeOnEscape = (event) => {
-    if (event.key === 'Escape') finish();
-  };
-  document.addEventListener('keydown', closeOnEscape);
-
-  function renderStep() {
-    const step = steps[current];
-    const isLast = current === steps.length - 1;
-    overlay.replaceChildren();
-
-    const card = document.createElement('div');
-    card.className = 'onboarding-card';
-
-    const icon = document.createElement('i');
-    icon.dataset.lucide = step.icon;
-    icon.className = 'onboarding-icon';
-    icon.setAttribute('aria-hidden', 'true');
-
-    const title = document.createElement('h2');
-    title.className = 'onboarding-title';
-    title.textContent = step.title;
-
-    const body = document.createElement('p');
-    body.className = 'onboarding-body';
-    body.textContent = step.body;
-
-    const dots = document.createElement('div');
-    dots.className = 'onboarding-dots';
-    steps.forEach((_, i) => {
-      const dot = document.createElement('span');
-      dot.className = `onboarding-dot${i === current ? ' onboarding-dot--active' : ''}`;
-      dots.appendChild(dot);
-    });
-
-    const actions = document.createElement('div');
-    actions.className = 'onboarding-actions';
-
-    const skipBtn = document.createElement('button');
-    skipBtn.className = 'btn btn--ghost';
-    skipBtn.textContent = t('onboarding.skip');
-    skipBtn.addEventListener('click', finish);
-
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'btn btn--primary';
-    nextBtn.textContent = isLast ? t('onboarding.done') : t('onboarding.next');
-    nextBtn.addEventListener('click', () => {
-      if (isLast) { finish(); return; }
-      current++;
-      renderStep();
-      if (window.lucide) window.lucide.createIcons({ el: overlay });
-      nextBtn.focus();
-    });
-
-    if (!isLast) actions.appendChild(skipBtn);
-    actions.appendChild(nextBtn);
-    card.appendChild(icon);
-    card.appendChild(title);
-    card.appendChild(body);
-    card.appendChild(dots);
-    card.appendChild(actions);
-    overlay.appendChild(card);
-
-    if (window.lucide) window.lucide.createIcons({ el: overlay });
-    setTimeout(() => nextBtn.focus(), 50);
-  }
-
-  function finish() {
-    document.removeEventListener('keydown', closeOnEscape);
-    localStorage.setItem(ONBOARDING_KEY, '1');
-    overlay.classList.add('onboarding-overlay--out');
-    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
-    // Fallback falls animationend nicht feuert (prefers-reduced-motion):
-    setTimeout(() => overlay.remove(), 300);
-  }
-
-  renderStep();
-  appContainer.appendChild(overlay);
-}
-
-// --------------------------------------------------------
-// Widget-Definitionen (Reihenfolge = Standard-Layout)
-// --------------------------------------------------------
-
-// NEU — primäre Inhalte (tasks, calendar) ganz oben
-const WIDGET_IDS = ['tasks', 'calendar', 'weather', 'meals', 'shopping', 'birthdays', 'budget', 'family', 'notes'];
-
-const WIDGET_SIZE_PRESETS = [
-  { value: '1x1', labelKey: 'dashboard.widgetSizeTiny'     },
-  { value: '2x1', labelKey: 'dashboard.widgetSizeNarrow'   },
-  { value: '2x2', labelKey: 'dashboard.widgetSizeStandard' },
-  { value: '3x2', labelKey: 'dashboard.widgetSizeLarge'    },
-  { value: '4x2', labelKey: 'dashboard.widgetSizeFull'     },
-];
-
-// Alle bekannten Größen inkl. Legacy-Werte — für normalizeDashboardConfig-Validierung
-const WIDGET_SIZE_OPTIONS = [...new Set([
-  ...WIDGET_SIZE_PRESETS.map((p) => p.value),
-  '1x2', '1x3', '1x4', '2x3', '2x4', '3x1', '3x3', '3x4', '4x1', '4x3', '4x4',
-])];
-
-function widgetSizeLabel(size) {
-  const preset = WIDGET_SIZE_PRESETS.find((p) => p.value === size);
-  return preset ? t(preset.labelKey) : size;
-}
-
-function defaultWidgetSize(id) {
-  if (['tasks', 'calendar'].includes(id)) return '2x2';
-  if (['weather', 'shopping'].includes(id)) return '2x1';
-  if (id === 'notes') return '2x1';
-  return '1x1';
-}
-
-const DEFAULT_WIDGET_CONFIG = WIDGET_IDS.map((id, i) => ({ id, visible: true, order: i, size: defaultWidgetSize(id) }));
-
-function normalizeDashboardConfig(input) {
-  const valid = Array.isArray(input)
-    ? input
-      .filter((w) => w && typeof w === 'object' && WIDGET_IDS.includes(w.id))
-      .map((w, i) => ({
-        id: w.id,
-        visible: w.visible !== false,
-        order: Number.isFinite(Number(w.order)) ? Number(w.order) : i,
-        size: WIDGET_SIZE_OPTIONS.includes(w.size) ? w.size : defaultWidgetSize(w.id),
-      }))
-    : [];
-  const presentIds = new Set(valid.map((w) => w.id));
-  for (const id of WIDGET_IDS) {
-    if (!presentIds.has(id)) {
-      valid.push({ id, visible: true, order: valid.length, size: defaultWidgetSize(id) });
-    }
-  }
-  return valid
-    .sort((a, b) => a.order - b.order)
-    .map((w, i) => ({ ...w, order: i }));
-}
-
-function setHtml(element, html) {
-  element.replaceChildren();
-  element.insertAdjacentHTML('afterbegin', html);
-}
-
-function widgetLabel(id) {
-  const map = {
-    tasks:    () => t('nav.tasks'),
-    calendar: () => t('nav.calendar'),
-    shopping: () => t('nav.shopping'),
-    meals:    () => t('nav.meals'),
-    notes:    () => t('nav.notes'),
-    weather:  () => t('dashboard.weather'),
-    birthdays: () => t('nav.birthdays'),
-    budget:   () => t('nav.budget'),
-    family:   () => t('dashboard.familyMembers'),
-  };
-  return (map[id] ?? (() => id))();
-}
-
-function widgetIcon(id) {
-  const map = { tasks: 'check-square', calendar: 'calendar', birthdays: 'cake', budget: 'wallet', family: 'users', shopping: 'shopping-cart', meals: 'utensils', notes: 'pin', weather: 'cloud-sun' };
-  return map[id] ?? 'layout-dashboard';
-}
-
-const BUDGET_CATEGORY_LABEL_KEYS = {
-  housing: 'catHousing',
-  food: 'catFood',
-  transport: 'catTransport',
-  personal_health: 'catPersonalHealth',
-  leisure: 'catLeisure',
-  shopping_clothing: 'catShoppingClothing',
-  education: 'catEducation',
-  financial_other: 'catFinancialOther',
-  'Erwerbseinkommen': 'catEarnedIncome',
-  'Kapitalerträge': 'catInvestmentIncome',
-  'Geschenke & Transfers': 'catTransferGiftIncome',
-  'Sozialleistungen': 'catGovernmentBenefits',
-  'Sonstiges Einkommen': 'catOtherIncome',
-};
-
-// --------------------------------------------------------
-// Hilfsfunktionen
-// --------------------------------------------------------
-
-function greeting(displayName) {
-  const h = new Date().getHours();
-  if (h < 12) return t('dashboard.greetingMorning', { name: esc(displayName) });
-  if (h < 18) return t('dashboard.greetingDay',     { name: esc(displayName) });
-  return t('dashboard.greetingEvening', { name: esc(displayName) });
-}
-
-function formatDateTime(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  const dateStr = d.toDateString() === today.toDateString()
-    ? t('common.today')
-    : d.toDateString() === tomorrow.toDateString()
-    ? t('common.tomorrow')
-    : formatDate(d);
-
-  const timeStr = formatTime(d);
-  const suffix = t('calendar.timeSuffix');
-  return `${dateStr}, ${timeStr}${suffix ? ' ' + suffix : ''}`.trim();
-}
-
-function formatDueDate(dateStr, timeStr) {
-  if (!dateStr) return null;
-
-  const dueDate = timeStr
-    ? new Date(`${dateStr}T${timeStr}`)
-    : new Date(`${dateStr}T23:59:59`);
-
-  if (isNaN(dueDate)) return null;
-
-  const now = new Date();
-  const diffMs = dueDate - now;
-  const diffH = diffMs / (1000 * 60 * 60);
-
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dueDay = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-  const calDayDiff = Math.round((dueDay - today) / (1000 * 60 * 60 * 24));
-
-  const fullLabel = timeStr
-    ? `${formatDate(dueDate)}, ${formatTime(dueDate)}` // beide aus i18n.js
-    : formatDate(dueDate);
-
-  if (diffMs < 0) {
-    return { text: `${t('dashboard.overdue')} – ${fullLabel}`, overdue: true };
-  }
-
-  if (calDayDiff === 1 && dueDate.getHours() >= 22 && diffH < 24) {
-    return { text: `${t('dashboard.dueSoon')} – ${fullLabel}`, overdue: false, soon: true };
-  }
-
-  if (calDayDiff === 0) {
-    return { text: timeStr ? `${t('dashboard.dueToday')} – ${formatTime(dueDate)}` : t('dashboard.dueToday'), overdue: false, soon: true };
-  }
-
-  if (calDayDiff === 1) {
-    return { text: `${t('dashboard.dueTomorrow')} – ${formatTime(dueDate)}`, overdue: false };
-  }
-
-  return { text: fullLabel, overdue: false };
-}
-
-const PRIORITY_LABELS = () => ({
-  urgent: t('tasks.priorityUrgent'),
-  high:   t('tasks.priorityHigh'),
-  medium: t('tasks.priorityMedium'),
-  low:    t('tasks.priorityLow'),
-});
-
-const MEAL_LABELS = () => ({
-  breakfast: t('meals.typeBreakfast'),
-  lunch:     t('meals.typeLunch'),
-  dinner:    t('meals.typeDinner'),
-  snack:     t('meals.typeSnack'),
-});
-
-const MEAL_ICONS = {
-  breakfast: 'sunrise',
-  lunch:     'sun',
-  dinner:    'moon',
-  snack:     'apple',
-};
-
-function initials(name = '') {
-  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
-}
-
-function budgetCategoryLabel(category) {
-  const key = BUDGET_CATEGORY_LABEL_KEYS[category];
-  return key ? t(`budget.${key}`) : (category || '-');
-}
-
-function formatCurrency(amount, currency = 'EUR') {
-  return new Intl.NumberFormat(getLocale(), {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: Math.abs(amount) >= 1000 ? 0 : 2,
-  }).format(amount || 0);
-}
-
-function widgetHeader(icon, title, count, linkHref, linkLabel) {
-  linkLabel = linkLabel ?? t('dashboard.allLink');
-  const badge = count != null
-    ? `<span class="widget__badge">${count}</span>`
-    : '';
-  return `
-    <div class="widget__header">
-      <span class="widget__title">
-        <i data-lucide="${icon}" class="widget__title-icon" aria-hidden="true"></i>
-        ${title}
-        ${badge}
-      </span>
-      <button type="button" data-route="${linkHref}" class="widget__link">
-        ${linkLabel}
-      </button>
-    </div>
-  `;
-}
-
-function buildTodayHighlights(data) {
-  const tasks = Array.isArray(data?.tasks)
-    ? data.tasks
-    : Array.isArray(data?.urgentTasks)
-      ? data.urgentTasks
-      : [];
-  const events = Array.isArray(data?.events)
-    ? data.events
-    : Array.isArray(data?.upcomingEvents)
-      ? data.upcomingEvents
-      : [];
-  const shoppingItems = Array.isArray(data?.shopping?.items) ? data.shopping.items : [];
-  const shoppingLists = Array.isArray(data?.shoppingLists) ? data.shoppingLists : [];
-  const meals = data?.meals ?? data?.todayMeals ?? null;
-
-  const urgentTask = tasks.find((task) => task.priority === 'urgent') ?? tasks[0] ?? null;
-  const nextEvent = events[0] ?? null;
-  const openShoppingCount = shoppingItems.length
-    ? shoppingItems.filter((item) => !item.is_checked).length
-    : shoppingLists.reduce((sum, list) => {
-        if (Number.isFinite(Number(list.open_count))) return sum + Number(list.open_count);
-        if (Number.isFinite(Number(list.openCount))) return sum + Number(list.openCount);
-        const items = Array.isArray(list.items) ? list.items : [];
-        return sum + items.filter((item) => !item.is_checked).length;
-      }, 0);
-  const dinner = Array.isArray(meals)
-    ? meals.find((meal) => meal.meal_type === 'dinner') ?? null
-    : meals?.dinner ?? null;
-
-  return {
-    urgentTask,
-    nextEvent,
-    openShoppingCount,
-    dinner,
-  };
-}
-
-// --------------------------------------------------------
-// Skeleton
-// --------------------------------------------------------
-
-function skeletonWidget(lines = 3) {
-  const lineHtml = Array.from({ length: lines }, (_, i) => `
-    <div class="skeleton skeleton-line ${i % 2 === 0 ? 'skeleton-line--full' : 'skeleton-line--medium'}"></div>
-  `).join('');
-  return `
-    <div class="widget-skeleton">
-      <div class="skeleton skeleton-line skeleton-line--short"></div>
-      ${lineHtml}
-    </div>
-  `;
-}
-
-// --------------------------------------------------------
-// Widget-Renderer
-// --------------------------------------------------------
-
-function renderUrgentTasks(tasks) {
-  if (!tasks.length) {
-    return `<div class="widget widget--tasks">
-      ${widgetHeader('check-square', t('nav.tasks'), 0, '/tasks')}
-      <div class="widget__empty">
-        <i data-lucide="check-circle" class="empty-state__icon" style="color:var(--color-success)" aria-hidden="true"></i>
-        <div>${t('dashboard.allDone')}</div>
-      </div>
-    </div>`;
-  }
-
-  const items = tasks.map((t) => {
-    const due = formatDueDate(t.due_date, t.due_time);
-    return `
-      <div class="task-item" data-task-id="${t.id}" data-task-title="${esc(t.title)}" role="button" tabindex="0">
-        ${t.priority !== 'none' ? `<div class="task-item__priority task-item__priority--${t.priority}" aria-hidden="true"></div>` : ''}
-        <span class="sr-only">${PRIORITY_LABELS()[t.priority] ?? t.priority}</span>
-        <div class="task-item__content">
-          <div class="task-item__title">${esc(t.title)}</div>
-          ${due ? `<div class="task-item__meta ${due.overdue ? 'task-item__meta--overdue' : ''} ${due.soon ? 'task-item__meta--soon' : ''}">${due.text}</div>` : ''}
-        </div>
-        ${t.assigned_color ? `
-          <div class="task-item__avatar" style="background-color:${esc(t.assigned_color)}"
-               title="${esc(t.assigned_name)}">${esc(initials(t.assigned_name || ''))}</div>` : ''}
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="widget widget--tasks">
-    ${widgetHeader('check-square', t('nav.tasks'), tasks.length, '/tasks')}
-    <div class="widget__body">${items}</div>
-  </div>`;
-}
-
-function renderUpcomingEvents(events) {
-  if (!events.length) {
-    return `<div class="widget widget--calendar">
-      ${widgetHeader('calendar', t('nav.calendar'), 0, '/calendar')}
-      <div class="widget__empty">
-        <i data-lucide="calendar-check" class="empty-state__icon" aria-hidden="true"></i>
-        <div>${t('dashboard.noEvents')}</div>
-      </div>
-    </div>`;
-  }
-
-  const today = new Date().toDateString();
-  const items = events.map((e) => {
-    const d = new Date(e.start_datetime);
-    const isToday = d.toDateString() === today;
-    const _suffix = t('calendar.timeSuffix');
-    const timeStr = e.all_day ? t('dashboard.allDay') : `${formatTime(d)}${_suffix ? ' ' + _suffix : ''}`.trim();
-    return `
-      <div class="event-item" data-route="/calendar" role="button" tabindex="0">
-        <div class="event-item__bar" style="background-color:${esc(e.cal_color || e.color) || 'var(--color-accent)'}"></div>
-        <div class="event-item__content">
-          <div class="event-item__title">${esc(e.title)}</div>
-          <div class="event-item__time">
-            <span class="event-time-badge ${isToday ? 'event-time-badge--today' : ''}">${isToday ? t('common.today') : formatDateTime(e.start_datetime).split(',')[0]}</span>
-            ${timeStr}
-            ${e.location ? ` · ${esc(fmtLocation(e.location))}` : ''}
-            ${e.cal_name ? `<span class="event-item__cal">${esc(e.cal_name)}</span>` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="widget widget--calendar">
-    ${widgetHeader('calendar', t('nav.calendar'), events.length, '/calendar')}
-    <div class="widget__body">${items}</div>
-  </div>`;
-}
-
-function renderUpcomingBirthdays(birthdays) {
-  if (!birthdays.length) {
-    return `<div class="widget widget--birthdays">
-      ${widgetHeader('cake', t('nav.birthdays'), 0, '/birthdays')}
-      <div class="widget__empty">
-        <i data-lucide="cake" class="empty-state__icon" aria-hidden="true"></i>
-        <div>${t('dashboard.noBirthdays')}</div>
-      </div>
-    </div>`;
-  }
-
-  const items = birthdays.map((b) => {
-    const daysLabel = b.days_until === 0
-      ? t('common.today')
-      : b.days_until === 1
-        ? t('common.tomorrow')
-        : t('dashboard.daysLeft', { count: b.days_until });
-    return `
-      <div class="birthday-widget-item" data-route="/birthdays" role="button" tabindex="0">
-        <div class="birthday-widget-item__avatar">
-          ${b.photo_data ? `<img src="${esc(b.photo_data)}" alt="" loading="lazy">` : `<span>${esc(initials(b.name))}</span>`}
-        </div>
-        <div class="birthday-widget-item__body">
-          <div class="birthday-widget-item__name">${esc(b.name)}</div>
-          <div class="birthday-widget-item__meta">${formatDate(b.next_birthday)} · ${daysLabel}</div>
-        </div>
-        <div class="birthday-widget-item__age">${esc(String(b.next_age ?? ''))}</div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="widget widget--birthdays">
-    ${widgetHeader('cake', t('nav.birthdays'), birthdays.length, '/birthdays')}
-    <div class="widget__body">${items}</div>
-  </div>`;
-}
-
-function renderTodayMeals(meals) {
-  const MEAL_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-  const mealLabels = MEAL_LABELS();
-  const slots = MEAL_ORDER.map((type) => {
-    const meal = meals.find((m) => m.meal_type === type);
-    return `
-      <div class="meal-slot ${meal ? 'meal-slot--filled' : ''}" data-type="${type}" data-route="/meals" role="button" tabindex="0">
-        <i data-lucide="${MEAL_ICONS[type]}" class="meal-slot__icon" aria-hidden="true"></i>
-        <div class="meal-slot__type">${mealLabels[type]}</div>
-        <div class="meal-slot__title">${meal ? esc(meal.title) : '-'}</div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="widget widget--meals">
-    ${widgetHeader('utensils', t('dashboard.todayMeals'), null, '/meals', t('dashboard.weekLink'))}
-    <div class="meal-slots">${slots}</div>
-  </div>`;
-}
-
-function renderPinnedNotes(notes) {
-  if (!notes.length) {
-    return `<div class="widget widget--notes">
-      ${widgetHeader('pin', t('nav.notes'), 0, '/notes')}
-      <div class="widget__empty">
-        <i data-lucide="sticky-note" class="empty-state__icon" aria-hidden="true"></i>
-        <div>${t('dashboard.noPinnedNotes')}</div>
-      </div>
-    </div>`;
-  }
-
-  const items = notes.map((n) => `
-    <div class="note-item" data-route="/notes" role="button" tabindex="0"
-         style="--note-color:${esc(n.color)};">
-      ${n.title ? `<div class="note-item__title">${esc(n.title)}</div>` : ''}
-      <div class="note-item__content">${renderMarkdownLight(n.content)}</div>
-    </div>
-  `).join('');
-
-  return `<div class="widget widget--notes widget--wide">
-    ${widgetHeader('pin', t('nav.notes'), notes.length, '/notes')}
-    <div class="notes-grid-widget">${items}</div>
-  </div>`;
-}
-
-function renderFamilyWidget(users) {
-  const visible = users.slice(0, 6);
-  const avatars = visible.map((u) => `
-    <span class="family-widget-avatar" style="background:${esc(u.avatar_color || '#64748b')}" title="${esc(u.display_name)}">
-      ${u.avatar_data ? `<img src="${esc(u.avatar_data)}" alt="${esc(u.display_name)}" loading="lazy">` : esc(initials(u.display_name))}
-    </span>
-  `).join('');
-
-  return `<div class="widget widget--family">
-    ${widgetHeader('users', t('dashboard.familyMembers'), users.length, '/settings')}
-    <div class="family-widget">
-      <div class="family-widget__count">${users.length}</div>
-      <div class="family-widget__meta">${t('dashboard.participantsAdded')}</div>
-      <div class="family-widget__avatars">${avatars}</div>
-    </div>
-  </div>`;
-}
-
-function renderBudgetWidget(budget, currency) {
-  const income = budget?.income || 0;
-  const expenses = budget?.expenses || 0;
-  const balance = budget?.balance || 0;
-  const savingsRate = income > 0 ? Math.round((balance / income) * 100) : 0;
-  const balanceTone = balance >= 0 ? 'positive' : 'negative';
-  const hasData = (budget?.entryCount || 0) > 0;
-
-  return `<div class="widget widget--budget">
-    ${widgetHeader('wallet', t('dashboard.budgetOverview'), null, '/budget')}
-    <div class="budget-widget">
-      <div class="budget-widget__headline">
-        <span>${t('dashboard.monthlyBalance')}</span>
-        <strong class="budget-widget__balance budget-widget__balance--${balanceTone}">${formatCurrency(balance, currency)}</strong>
-      </div>
-      <div class="budget-widget__grid">
-        <div class="budget-widget-metric budget-widget-metric--income">
-          <span>${t('dashboard.monthlyIncome')}</span>
-          <strong>${formatCurrency(income, currency)}</strong>
-        </div>
-        <div class="budget-widget-metric budget-widget-metric--expense">
-          <span>${t('dashboard.monthlyExpenses')}</span>
-          <strong>${formatCurrency(expenses, currency)}</strong>
-        </div>
-        <div class="budget-widget-metric">
-          <span>${t('dashboard.savingsRate')}</span>
-          <strong>${income > 0 ? `${savingsRate}%` : '-'}</strong>
-        </div>
-        <div class="budget-widget-metric">
-          <span>${t('dashboard.budgetEntries')}</span>
-          <strong>${budget?.entryCount || 0}</strong>
-        </div>
-      </div>
-      <div class="budget-widget__footer">
-        ${hasData && budget?.topExpenseCategory
-          ? `${t('dashboard.topExpense')}: <strong>${esc(budgetCategoryLabel(budget.topExpenseCategory))}</strong> · ${formatCurrency(budget.topExpenseAmount, currency)}`
-          : t('dashboard.noBudgetData')}
-      </div>
-    </div>
-  </div>`;
-}
-
-function renderQuickAction({ route, label, icon, tone = '' }) {
-  return `
-    <button type="button" class="dashboard-action ${tone ? `dashboard-action--${tone}` : ''}" data-route="${route}" aria-label="${esc(label)}">
-      <span class="dashboard-action__icon"><i data-lucide="${icon}" aria-hidden="true"></i></span>
-      <span class="dashboard-action__label">${label}</span>
-    </button>
-  `;
-}
-
-function renderTodayCard(icon, label, value, route, tone) {
-  return `
-    <button type="button" class="today-cockpit-card today-cockpit-card--${tone}" data-route="${route}">
-      <span class="today-cockpit-card__icon"><i data-lucide="${icon}" aria-hidden="true"></i></span>
-      <span class="today-cockpit-card__label">${esc(label)}</span>
-      <strong class="today-cockpit-card__value">${esc(value)}</strong>
-    </button>
-  `;
-}
-
-function renderTodayCockpit(data) {
-  const highlights = buildTodayHighlights(data);
-  const taskTitle = highlights.urgentTask?.title ?? t('dashboard.todayNoTasks');
-  const eventTitle = highlights.nextEvent?.title ?? t('dashboard.todayNoEvents');
-  const dinnerTitle = highlights.dinner?.title ?? t('dashboard.todayNoDinner');
-
-  return `
-    <section class="today-cockpit" aria-labelledby="today-cockpit-title">
-      <div class="today-cockpit__header">
-        <h2 id="today-cockpit-title">${esc(t('dashboard.todayTitle'))}</h2>
-        <span class="today-cockpit__date">${esc(formatDate(new Date()))}</span>
-      </div>
-      <div class="today-cockpit__grid">
-        ${renderTodayCard('check-square', t('dashboard.todayTask'), taskTitle, '/tasks', 'task')}
-        ${renderTodayCard('calendar', t('dashboard.todayEvent'), eventTitle, '/calendar', 'event')}
-        ${renderTodayCard('shopping-cart', t('dashboard.todayShopping'), t('dashboard.todayShoppingCount', { count: highlights.openShoppingCount }), '/shopping', 'shopping')}
-        ${renderTodayCard('utensils', t('dashboard.todayDinner'), dinnerTitle, '/meals', 'dinner')}
-      </div>
-    </section>
-  `;
-}
-
-
-function renderDashboardOverview(user, editing = false) {
-  const dateLabel = formatDate(new Date());
-
-  const actions = [
-    { route: '/tasks', label: t('nav.tasks'), icon: 'check-square', tone: 'blue' },
-    { route: '/calendar', label: t('nav.calendar'), icon: 'calendar', tone: 'violet' },
-    { route: '/shopping', label: t('nav.shopping'), icon: 'shopping-cart', tone: 'green' },
-    { route: '/notes', label: t('nav.notes'), icon: 'sticky-note', tone: 'amber' },
-  ].map(renderQuickAction).join('');
-
-  return `
-    <section class="dashboard-overview">
-      <div class="dashboard-overview__header">
-        <div class="dashboard-overview__heading">
-          <span class="dashboard-overview__date">${dateLabel}</span>
-          <h1 class="dashboard-overview__title">${greeting(user.display_name)}</h1>
-        </div>
-        <div class="dashboard-overview__tools">
-          ${editing ? `
-          <div class="dashboard-customize-toolbar" role="toolbar" aria-label="${t('dashboard.customizeTitle')}">
-            <button class="btn btn--secondary" id="dashboard-manage-widgets">
-              <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
-              ${t('dashboard.customizeManage')}
-            </button>
-            <button class="btn btn--ghost" id="dashboard-customize-reset">${t('dashboard.customizeReset')}</button>
-            <button class="btn btn--secondary" id="dashboard-customize-cancel">${t('common.cancel')}</button>
-            <button class="btn btn--primary" id="dashboard-customize-save">${t('common.save')}</button>
-          </div>` : `<div class="dashboard-overview__actions">${actions}</div>`}
-          <button class="dashboard-icon-btn" id="dashboard-customize-btn"
-                  aria-label="${editing ? t('dashboard.customizeExit') : t('dashboard.customize')}"
-                  title="${editing ? t('dashboard.customizeExit') : t('dashboard.customize')}"
-                  aria-pressed="${editing ? 'true' : 'false'}">
-            <i data-lucide="${editing ? 'x' : 'settings-2'}" aria-hidden="true"></i>
-          </button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function widgetSizeClass(size) {
-  return WIDGET_SIZE_OPTIONS.includes(size) ? `widget-size--${size}` : 'widget-size--1x1';
-}
-
-function renderSizeMiniGrid(size) {
-  return `<span class="widget-size-mini" aria-hidden="true">${renderSizeMiniGridCells(size)}</span>`;
-}
-
-function renderSizeMiniGridCells(size) {
-  const [cols, rows] = size.split('x').map(Number);
-  return Array.from({ length: 16 }, (_, i) => {
-    const col = (i % 4) + 1;
-    const row = Math.floor(i / 4) + 1;
-    return `<span class="${col <= cols && row <= rows ? 'is-active' : ''}"></span>`;
-  }).join('');
-}
-
-function renderWidgetCustomizeControls(w) {
-  const sizeOptions = WIDGET_SIZE_PRESETS.map(({ value: size }) => `
-    <option value="${size}" ${w.size === size ? 'selected' : ''}>${widgetSizeLabel(size)}</option>
-  `).join('');
-
-  return `
-    <div class="widget-edit-controls" data-widget-controls>
-      <button type="button" class="widget-edit-controls__handle" data-widget-drag-handle aria-label="${t('dashboard.customizeDrag')}">
-        <i data-lucide="grip-vertical" aria-hidden="true"></i>
-      </button>
-      <label class="widget-edit-controls__size">
-        <span>${t('dashboard.customizeSize')}</span>
-        ${renderSizeMiniGrid(w.size)}
-        <select class="widget-edit-controls__select" data-widget-size="${esc(w.id)}" aria-label="${t('dashboard.customizeSizeFor', { widget: widgetLabel(w.id) })}">
-          ${sizeOptions}
-        </select>
-      </label>
-      <button type="button" class="widget-edit-controls__hide" data-widget-hide="${esc(w.id)}" aria-label="${t('dashboard.customizeHide', { widget: widgetLabel(w.id) })}">
-        <i data-lucide="eye-off" aria-hidden="true"></i>
-      </button>
-    </div>
-  `;
-}
-
-function renderDashboardLayout(cfg, data, weather, currency, { editing = false } = {}) {
-  const widgetById = {
-    tasks: () => renderUrgentTasks(data.urgentTasks ?? []),
-    calendar: () => renderUpcomingEvents(data.upcomingEvents ?? []),
-    birthdays: () => renderUpcomingBirthdays(data.birthdays ?? []),
-    budget: () => renderBudgetWidget(data.budget ?? {}, currency),
-    family: () => renderFamilyWidget(data.users ?? []),
-    meals: () => renderTodayMeals(data.todayMeals ?? []),
-    notes: () => renderPinnedNotes(data.pinnedNotes ?? []),
-    shopping: () => renderShoppingLists(data.shoppingLists ?? []),
-    weather: () => (weather ? renderWeatherWidget(weather) : ''),
-  };
-
-  const tiles = cfg
-    .filter((w) => w.visible && widgetById[w.id])
-    .map((w) => {
-      const html = widgetById[w.id]();
-      if (!html) return '';
-      return `<div class="widget-wrapper ${widgetSizeClass(w.size)} ${editing ? 'widget-wrapper--editing' : ''}"
-                   data-widget-id="${esc(w.id)}" ${editing ? 'draggable="true"' : ''}>
-        ${editing ? renderWidgetCustomizeControls(w) : ''}
-        ${html}
-      </div>`;
-    })
-    .join('');
-
-  return `<div class="dashboard__grid ${editing ? 'dashboard__grid--editing' : ''}" id="dashboard-widget-grid">${tiles}</div>`;
-}
-
-function renderDashboardSkeleton() {
-  const tiles = DEFAULT_WIDGET_CONFIG
-    .filter((w) => w.visible)
-    .map((w) => `<div class="widget-wrapper ${widgetSizeClass(w.size)}">${skeletonWidget(3)}</div>`)
-    .join('');
-  return `
-    <section class="dashboard-overview">
-      <div class="dashboard-overview__header">
-        <div class="dashboard-overview__heading">
-          <div class="skeleton skeleton-line skeleton-line--short"></div>
-          <div class="skeleton skeleton-line skeleton-line--medium"></div>
-        </div>
-      </div>
-    </section>
-    <div class="dashboard__grid">${tiles}</div>
-  `;
-}
-
-// --------------------------------------------------------
-// Shopping-Widget
-// --------------------------------------------------------
-
-function renderShoppingLists(lists) {
-  if (!lists.length) return '';
-
-  const totalOpen = lists.reduce((sum, l) => sum + l.open_count, 0);
-
-  const listsHtml = lists.map((list) => {
-    const progress = list.total_count > 0
-      ? Math.round(((list.total_count - list.open_count) / list.total_count) * 100)
-      : 0;
-
-    const itemsHtml = list.items.map((item) => `
-      <div class="shopping-widget-item">
-        <span class="shopping-widget-item__dot"></span>
-        <span class="shopping-widget-item__name">${esc(item.name)}</span>
-        ${item.quantity ? `<span class="shopping-widget-item__qty">${esc(item.quantity)}</span>` : ''}
-      </div>
-    `).join('');
-
-    const moreCount = list.open_count - list.items.length;
-
-    return `
-      <div class="shopping-widget-list" data-route="/shopping" role="button" tabindex="0">
-        <div class="shopping-widget-list__header">
-          <span class="shopping-widget-list__name">${esc(list.name)}</span>
-          <span class="shopping-widget-list__count">${list.total_count - list.open_count}/${list.total_count}</span>
-        </div>
-        <div class="shopping-widget-list__progress">
-          <div class="shopping-widget-list__bar" style="width:${progress}%"></div>
-        </div>
-        <div class="shopping-widget-list__items">
-          ${itemsHtml}
-          ${moreCount > 0 ? `<div class="shopping-widget-item shopping-widget-item--more">${t('dashboard.shoppingMore', { count: moreCount })}</div>` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  return `<div class="widget widget--shopping">
-    ${widgetHeader('shopping-cart', t('nav.shopping'), totalOpen, '/shopping')}
-    <div class="widget__body">${listsHtml}</div>
-  </div>`;
-}
-
-// --------------------------------------------------------
-// Wetter-Widget
-// --------------------------------------------------------
-
-const WEATHER_ICON_BASE = '/api/v1/weather/icon/';
-
-function renderWeatherWidget(weather) {
-  if (!weather) return '';
-
-  const { city, current, forecast, units } = weather;
-  const unitSymbol = units === 'imperial' ? '°F' : units === 'standard' ? 'K' : '°C';
-  const windUnit   = units === 'imperial' ? 'mph' : 'km/h';
-
-  const forecastHtml = forecast.map((d, i) => {
-    const date = new Date(d.date + 'T12:00:00');
-    const label = new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(date);
-    const extraCls = i >= 3 ? ' weather-forecast__day--extended' : '';
-    return `
-      <div class="weather-forecast__day${extraCls}">
-        <div class="weather-forecast__label">${label}</div>
-        <img class="weather-forecast__icon" src="${WEATHER_ICON_BASE}${d.icon}"
-             alt="${esc(d.desc)}" width="32" height="32" loading="lazy">
-        <div class="weather-forecast__temps">
-          <span class="weather-forecast__high">${d.temp_max}°</span>
-          <span class="weather-forecast__low">${d.temp_min}°</span>
-        </div>
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="widget widget--weather weather-widget" id="weather-widget">
-      <button class="weather-widget__refresh" id="weather-refresh-btn" aria-label="${t('dashboard.weatherRefresh')}" title="${t('dashboard.weatherRefreshTitle')}">
-        <i data-lucide="refresh-cw" class="icon-md" aria-hidden="true"></i>
-      </button>
-      <div class="weather-widget__inner">
-        <div class="weather-widget__main">
-          <div class="weather-widget__left">
-            <div class="weather-widget__temp">${esc(current.temp)}${unitSymbol}</div>
-            <div class="weather-widget__desc">${esc(current.desc)}</div>
-            <div class="weather-widget__city">${esc(city)}</div>
-            <div class="weather-widget__meta">
-              ${t('dashboard.weatherFeelsLike', { temp: current.feels_like, humidity: current.humidity, wind: current.wind_speed, windUnit })}
-            </div>
-          </div>
-          <img class="weather-widget__icon" src="${WEATHER_ICON_BASE}${current.icon}"
-               alt="${esc(current.desc)}" width="80" height="80" loading="lazy">
-        </div>
-        ${forecast.length ? `<div class="weather-forecast">${forecastHtml}</div>` : ''}
-      </div>
-    </div>`;
-}
-
-// --------------------------------------------------------
-// FAB Speed-Dial
-// --------------------------------------------------------
-
-const FAB_ACTIONS = () => [
-  { route: '/tasks',    label: t('dashboard.fabTask'),     icon: 'check-square'   },
-  { route: '/calendar', label: t('dashboard.fabCalendar'), icon: 'calendar-plus'  },
-  { route: '/shopping', label: t('dashboard.fabShopping'), icon: 'shopping-cart'  },
-  { route: '/notes',    label: t('dashboard.fabNote'),     icon: 'sticky-note'    },
-];
-
-function renderFab() {
-  const actionsHtml = FAB_ACTIONS().map((a) => `
-    <div class="fab-action" data-route="${a.route}" role="button" tabindex="-1"
-         aria-label="${a.label}">
-      <span class="fab-action__label">${a.label}</span>
-      <button class="fab-action__btn" tabindex="-1" aria-hidden="true">
-        <i data-lucide="${a.icon}" aria-hidden="true"></i>
-      </button>
-    </div>
-  `).join('');
-
-  return `
-    <div class="fab-backdrop" id="fab-backdrop"></div>
-    <div class="fab-container" id="fab-container">
-      <button class="fab-main" id="fab-main" aria-label="${t('nav.quickActions')}" aria-expanded="false">
-        <i data-lucide="plus" aria-hidden="true"></i>
-      </button>
-      <div class="fab-actions" id="fab-actions" aria-hidden="true">
-        ${actionsHtml}
-      </div>
-    </div>
-  `;
-}
-
-function initFab(container, signal) {
-  const fabMain     = container.querySelector('#fab-main');
-  const fabActions  = container.querySelector('#fab-actions');
-  const fabBackdrop = container.querySelector('#fab-backdrop');
-  if (!fabMain) return;
-
-  // "Neu"-Button-Selector auf der jeweiligen Zielseite
-  const FAB_NEW_BTN = {
-    '/tasks':    '#btn-new-task',
-    '/calendar': '#fab-new-event',
-    '/shopping': '#fab-new-item',
-    '/notes':    '#fab-new-note',
-  };
-
-  let open = false;
-
-  function toggleFab(force) {
-    open = force !== undefined ? force : !open;
-    fabMain.classList.toggle('fab-main--open', open);
-    fabMain.setAttribute('aria-expanded', String(open));
-    fabActions.classList.toggle('fab-actions--visible', open);
-    fabActions.setAttribute('aria-hidden', String(!open));
-    fabBackdrop?.classList.toggle('fab-backdrop--visible', open);
-    fabActions.querySelectorAll('[role="button"]').forEach((el) => {
-      el.tabIndex = open ? 0 : -1;
-    });
-    if (window.lucide) window.lucide.createIcons({ el: container });
-  }
-
-  fabMain.addEventListener('click', (e) => { e.stopPropagation(); toggleFab(); });
-
-  fabActions.querySelectorAll('[data-route]').forEach((el) => {
-    const go = async () => {
-      toggleFab(false);
-      await window.oikos.navigate(el.dataset.route);
-      const btnSelector = FAB_NEW_BTN[el.dataset.route];
-      if (btnSelector) document.querySelector(btnSelector)?.click();
-    };
-    el.addEventListener('click', go);
-    el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-    });
-  });
-
-  document.addEventListener('click', () => { if (open) toggleFab(false); }, { signal });
-}
-
-// --------------------------------------------------------
-// Customize-Modal
-// --------------------------------------------------------
-
-function openCustomizeModal(currentConfig, onSave) {
-  let draft = currentConfig.map((w) => ({ ...w }));
-
-  function buildRows() {
-    return draft.map((w, i) => {
-      const isFirst = i === 0;
-      const isLast  = i === draft.length - 1;
-      const sizeOptions = WIDGET_SIZE_OPTIONS.map((size) => `
-        <option value="${size}" ${w.size === size ? 'selected' : ''}>${widgetSizeLabel(size)}</option>
-      `).join('');
-      return `
-        <div class="customize-row" data-id="${esc(w.id)}" style="view-transition-name: widget-row-${esc(w.id)}">
-          <label class="customize-row__toggle">
-            <input type="checkbox" class="customize-row__check" data-id="${w.id}"
-                   ${w.visible ? 'checked' : ''} aria-label="${widgetLabel(w.id)}">
-            <span class="customize-row__slider" aria-hidden="true"></span>
-          </label>
-          <i data-lucide="${widgetIcon(w.id)}" class="customize-row__icon" aria-hidden="true"></i>
-          <span class="customize-row__name">${widgetLabel(w.id)}</span>
-          <label class="customize-row__size">
-            <span>${t('dashboard.customizeSize')}</span>
-            ${renderSizeMiniGrid(w.size)}
-            <select class="form-input customize-row__select" data-size-id="${esc(w.id)}" aria-label="${t('dashboard.customizeSizeFor', { widget: widgetLabel(w.id) })}">
-              ${sizeOptions}
-            </select>
-          </label>
-          <div class="customize-row__actions">
-            <button class="customize-row__btn" data-move="up" data-id="${w.id}"
-                    ${isFirst ? 'disabled' : ''} aria-label="${t('dashboard.customizeMoveUp')}">
-              <i data-lucide="chevron-up" class="icon-md" aria-hidden="true"></i>
-            </button>
-            <button class="customize-row__btn" data-move="down" data-id="${w.id}"
-                    ${isLast ? 'disabled' : ''} aria-label="${t('dashboard.customizeMoveDown')}">
-              <i data-lucide="chevron-down" class="icon-md" aria-hidden="true"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  openModal({
-    title:  t('dashboard.customizeTitle'),
-    size:   'sm',
-    content: `
-      <div class="customize-list" id="customize-list">${buildRows()}</div>
-      <div class="modal-actions" style="margin-top:var(--space-4)">
-        <button type="button" class="btn btn--ghost" id="customize-reset">${t('dashboard.customizeReset')}</button>
-        <button type="button" class="btn btn--primary" id="customize-save">${t('common.save')}</button>
-      </div>`,
-    onSave(panel) {
-      if (window.lucide) window.lucide.createIcons({ el: panel });
-
-      function rebuildList() {
-        const list = panel.querySelector('#customize-list');
-        if (!list) return;
-        const doRebuild = () => {
-          list.replaceChildren();
-          list.insertAdjacentHTML('beforeend', buildRows());
-          if (window.lucide) window.lucide.createIcons({ el: list });
-          wireRows();
-        };
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (document.startViewTransition && !reducedMotion) {
-          document.startViewTransition(doRebuild);
-        } else {
-          doRebuild();
-        }
-      }
-
-      function wireRows() {
-        const list = panel.querySelector('#customize-list');
-        if (!list) return;
-
-        list.querySelectorAll('.customize-row__check').forEach((cb) => {
-          cb.addEventListener('change', () => {
-            const id = cb.dataset.id;
-            const entry = draft.find((w) => w.id === id);
-            if (entry) entry.visible = cb.checked;
-          });
-        });
-
-        list.querySelectorAll('[data-move]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const id  = btn.dataset.id;
-            const dir = btn.dataset.move;
-            const idx = draft.findIndex((w) => w.id === id);
-            if (dir === 'up' && idx > 0) {
-              [draft[idx - 1], draft[idx]] = [draft[idx], draft[idx - 1]];
-            } else if (dir === 'down' && idx < draft.length - 1) {
-              [draft[idx], draft[idx + 1]] = [draft[idx + 1], draft[idx]];
-            }
-            draft.forEach((w, i) => { w.order = i; });
-            rebuildList();
-          });
-        });
-
-        list.querySelectorAll('[data-size-id]').forEach((select) => {
-          select.addEventListener('change', () => {
-            const entry = draft.find((w) => w.id === select.dataset.sizeId);
-            if (!entry || !WIDGET_SIZE_OPTIONS.includes(select.value)) return;
-            entry.size = select.value;
-            const mini = select.closest('.customize-row__size')?.querySelector('.widget-size-mini');
-            if (mini) {
-              mini.replaceChildren();
-              mini.insertAdjacentHTML('afterbegin', renderSizeMiniGridCells(select.value));
-            }
-          });
-        });
-
-        list.querySelectorAll('.customize-row').forEach((row, idx) => {
-          row.setAttribute('draggable', 'true');
-          row.addEventListener('dragstart', (e) => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', String(idx));
-            row.classList.add('customize-row--dragging');
-          });
-          row.addEventListener('dragend', () => row.classList.remove('customize-row--dragging'));
-          row.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            row.classList.add('customize-row--over');
-          });
-          row.addEventListener('dragleave', () => row.classList.remove('customize-row--over'));
-          row.addEventListener('drop', (e) => {
-            e.preventDefault();
-            row.classList.remove('customize-row--over');
-            const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-            if (fromIdx === idx) return;
-            const [moved] = draft.splice(fromIdx, 1);
-            draft.splice(idx, 0, moved);
-            draft.forEach((w, i) => { w.order = i; });
-            rebuildList();
-          });
-        });
-      }
-
-      wireRows();
-
-      panel.querySelector('#customize-reset')?.addEventListener('click', () => {
-        draft = DEFAULT_WIDGET_CONFIG.map((w) => ({ ...w }));
-        rebuildList();
-      });
-
-      panel.querySelector('#customize-save')?.addEventListener('click', async () => {
-        const saveBtn = panel.querySelector('#customize-save');
-        saveBtn.disabled = true;
-        try {
-          await api.put('/preferences', { dashboard_widgets: draft });
-          closeModal({ force: true });
-          onSave(draft);
-          window.oikos?.showToast(t('dashboard.customizeSaved'), 'success', 1500);
-        } catch {
-          window.oikos?.showToast(t('common.errorGeneric'), 'error');
-        } finally {
-          saveBtn.disabled = false;
-        }
-      });
-    },
-  });
-}
-
-// --------------------------------------------------------
-// Task Quick-Action Modal
-// --------------------------------------------------------
-
-function openTaskQuickAction(taskId, taskTitle, rerender) {
-  openModal({
-    title: taskTitle,
-    size: 'sm',
-    content: `
-      <div class="modal-actions">
-        <button type="button" class="btn btn--ghost" data-action="edit">
-          <i data-lucide="edit-2" style="width:16px;height:16px;" aria-hidden="true"></i>
-          ${t('common.edit')}
-        </button>
-        <button type="button" class="btn btn--primary" data-action="done">
-          <i data-lucide="check-circle" style="width:16px;height:16px;" aria-hidden="true"></i>
-          ${t('tasks.kanbanMoveToDone')}
-        </button>
-      </div>
-    `,
-    onSave: (panel) => {
-      panel.querySelector('[data-action="done"]').addEventListener('click', async () => {
-        try {
-          await api.patch(`/tasks/${taskId}/status`, { status: 'done' });
-          closeModal({ force: true });
-          window.oikos?.showToast(t('tasks.swipedDoneToast'), 'success');
-          rerender();
-        } catch (err) {
-          window.oikos?.showToast(err.message, 'danger');
-        }
-      });
-      panel.querySelector('[data-action="edit"]').addEventListener('click', () => {
-        closeModal({ force: true });
-        window.oikos.navigate(`/tasks?open=${taskId}`);
-      });
-    },
-  });
-}
-
-// --------------------------------------------------------
-// Navigations-Links verdrahten
-// --------------------------------------------------------
-
-function wireLinks(container, rerender, { editing = false } = {}) {
-  container.querySelectorAll('[data-route]').forEach((el) => {
-    if (el.id === 'fab-main' || el.closest('#fab-actions')) return;
-    if (editing && el.closest('.widget-wrapper--editing')) return;
-    const go = () => window.oikos.navigate(el.dataset.route);
-    if (el.tagName === 'A') {
-      el.addEventListener('click', (e) => { e.preventDefault(); go(); });
-    } else {
-      el.addEventListener('click', go);
-      el.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-      });
-    }
-  });
-
-  // Task-Items öffnen Quick-Action-Modal statt direkt zu navigieren
-  if (editing) return;
-  container.querySelectorAll('.task-item[data-task-id]').forEach((el) => {
-    const show = () => openTaskQuickAction(el.dataset.taskId, el.dataset.taskTitle, rerender);
-    el.addEventListener('click', show);
-    el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); }
-    });
-  });
-}
-
-function reorderWidgetConfig(config, fromId, toId, placement = 'before') {
-  const fromIdx = config.findIndex((w) => w.id === fromId);
-  let toIdx = config.findIndex((w) => w.id === toId);
-  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return config;
-  const next = config.map((w) => ({ ...w }));
-  const [moved] = next.splice(fromIdx, 1);
-  if (fromIdx < toIdx) toIdx -= 1;
-  if (placement === 'after') toIdx += 1;
-  next.splice(toIdx, 0, moved);
-  return next.map((w, i) => ({ ...w, order: i }));
-}
-
-function closestWidgetDrop(grid, event, draggedId) {
-  const candidates = [...grid.querySelectorAll('.widget-wrapper[data-widget-id]')]
-    .filter((item) => item.dataset.widgetId !== draggedId);
-  if (!candidates.length) return null;
-
-  let nearest = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const item of candidates) {
-    const rect = item.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const dx = event.clientX - centerX;
-    const dy = event.clientY - centerY;
-    const distance = (dy * dy * 1.7) + (dx * dx);
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearest = { item, rect };
-    }
-  }
-  if (!nearest) return null;
-
-  const sameRow = event.clientY >= nearest.rect.top && event.clientY <= nearest.rect.bottom;
-  const placement = sameRow
-    ? (event.clientX > nearest.rect.left + nearest.rect.width / 2 ? 'after' : 'before')
-    : (event.clientY > nearest.rect.top + nearest.rect.height / 2 ? 'after' : 'before');
-
-  return { id: nearest.item.dataset.widgetId, placement, item: nearest.item };
-}
-
-function updateWidgetConfig(config, id, patch) {
-  return config.map((w) => w.id === id ? { ...w, ...patch } : w)
-    .map((w, i) => ({ ...w, order: i }));
-}
-
-// --------------------------------------------------------
-// Haupt-Render
-// --------------------------------------------------------
+import { apiFetch } from '../api.js';
+const showToast = (msg, type) => window.oikos?.showToast(msg, type);
 
 export async function render(container, { user }) {
-  _fabController?.abort();
-  _fabController = new AbortController();
+  const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
 
-  setHtml(container, `
-    <div class="dashboard">
-      <h1 class="sr-only">${t('dashboard.title')}</h1>
-      <div class="dashboard-shell" id="dashboard-shell">
-        ${renderDashboardSkeleton()}
-      </div>
-    </div>
-    ${renderFab()}
-  `);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'dashboard-page';
+  wrapper.style.cssText = 'max-width: 900px; margin: 0 auto; padding-bottom: 40px; padding-top: 20px;';
 
-  let data         = { upcomingEvents: [], urgentTasks: [], todayMeals: [], pinnedNotes: [], shoppingLists: [], birthdays: [], users: [], budget: {} };
-  let weather      = null;
-  let widgetConfig = DEFAULT_WIDGET_CONFIG;
-  let savedWidgetConfig = DEFAULT_WIDGET_CONFIG;
-  let isCustomizing = false;
-  let currency     = 'EUR';
-  try {
-    const [dashRes, weatherRes, prefsRes] = await Promise.all([
-      api.get('/dashboard'),
-      api.get(`/weather?lang=${encodeURIComponent(getLocale())}`).catch(() => ({ data: null })),
-      api.get('/preferences').catch(() => ({ data: {} })),
-    ]);
-    data         = dashRes;
-    weather      = weatherRes.data ?? null;
-    widgetConfig = normalizeDashboardConfig(prefsRes.data?.dashboard_widgets ?? DEFAULT_WIDGET_CONFIG);
-    savedWidgetConfig = widgetConfig.map((w) => ({ ...w }));
-    currency     = prefsRes.data?.currency ?? 'EUR';
-  } catch (err) {
-    console.error('[Dashboard] Ladefehler:', err.message, 'Status:', err.status ?? 'network');
-    window.oikos?.showToast(t('dashboard.loadError'), 'warning');
-  }
+  const header = document.createElement('div');
+  header.style.cssText = 'margin-bottom: 30px;';
+  
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  const rerender = () => render(container, { user });
+  header.innerHTML = `
+    <h1 style="font-size: 32px; font-weight: 800; margin: 0; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); -webkit-background-clip: text; color: transparent;">${greeting}, ${user.display_name}</h1>
+    <p style="color: var(--text-secondary); margin: 8px 0 0 0; font-size: 16px;">${isParent ? 'Here is your family overview today.' : 'Ready to crush your goals today?'}</p>
+  `;
+  wrapper.appendChild(header);
 
-  async function saveDashboardConfig() {
-    try {
-      await api.put('/preferences', { dashboard_widgets: widgetConfig });
-      savedWidgetConfig = widgetConfig.map((w) => ({ ...w }));
-      isCustomizing = false;
-      rebuildDashboard(widgetConfig);
-      window.oikos?.showToast(t('dashboard.customizeSaved'), 'success', 1500);
-    } catch {
-      window.oikos?.showToast(t('common.errorGeneric'), 'error');
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;';
+  wrapper.appendChild(grid);
+  container.replaceChildren(wrapper);
+
+  if (isParent) {
+    // PARENT DASHBOARD
+    await renderParentDashboard(grid, user);
+    if (!localStorage.getItem('dp_setup_wizard')) {
+      showOnboardingWizard(wrapper);
     }
+  } else {
+    // CHILD DASHBOARD
+    await renderChildDashboard(grid, user);
   }
 
-  function cancelDashboardConfig() {
-    widgetConfig = savedWidgetConfig.map((w) => ({ ...w }));
-    isCustomizing = false;
-    rebuildDashboard(widgetConfig);
-  }
-
-  function resetDashboardConfig() {
-    widgetConfig = DEFAULT_WIDGET_CONFIG.map((w) => ({ ...w }));
-    rebuildDashboard(widgetConfig);
-  }
-
-  function wireDashboardEditMode() {
-    if (!isCustomizing) return;
-    const grid = container.querySelector('#dashboard-widget-grid');
-    if (!grid) return;
-    let draggedId = '';
-    let currentDrop = null;
-
-    const clearDropHint = () => {
-      grid.querySelectorAll('.widget-wrapper--drop-before, .widget-wrapper--drop-after').forEach((el) => {
-        el.classList.remove('widget-wrapper--drop-before', 'widget-wrapper--drop-after');
-      });
-    };
-
-    const updateDropHint = (event) => {
-      if (!draggedId) return null;
-      clearDropHint();
-      currentDrop = closestWidgetDrop(grid, event, draggedId);
-      if (currentDrop) {
-        currentDrop.item.classList.add(currentDrop.placement === 'after' ? 'widget-wrapper--drop-after' : 'widget-wrapper--drop-before');
-      }
-      return currentDrop;
-    };
-
-    grid.querySelectorAll('.widget-wrapper[data-widget-id]').forEach((wrapper) => {
-      wrapper.addEventListener('dragstart', (event) => {
-        draggedId = wrapper.dataset.widgetId;
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', draggedId);
-        wrapper.classList.add('widget-wrapper--dragging');
-      });
-      wrapper.addEventListener('dragend', () => {
-        draggedId = '';
-        wrapper.classList.remove('widget-wrapper--dragging');
-        currentDrop = null;
-        clearDropHint();
-      });
-    });
-
-    grid.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      updateDropHint(event);
-    });
-
-    grid.addEventListener('dragleave', (event) => {
-      if (!grid.contains(event.relatedTarget)) {
-        currentDrop = null;
-        clearDropHint();
-      }
-    });
-
-    grid.addEventListener('drop', (event) => {
-      event.preventDefault();
-      const fromId = event.dataTransfer.getData('text/plain') || draggedId;
-      const drop = currentDrop || updateDropHint(event);
-      if (fromId && drop) {
-        widgetConfig = reorderWidgetConfig(widgetConfig, fromId, drop.id, drop.placement);
-        rebuildDashboard(widgetConfig);
-      }
-    });
-
-    grid.querySelectorAll('[data-widget-size]').forEach((select) => {
-      select.addEventListener('change', () => {
-        if (!WIDGET_SIZE_OPTIONS.includes(select.value)) return;
-        widgetConfig = updateWidgetConfig(widgetConfig, select.dataset.widgetSize, { size: select.value });
-        rebuildDashboard(widgetConfig);
-      });
-    });
-
-    grid.querySelectorAll('[data-widget-hide]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        widgetConfig = updateWidgetConfig(widgetConfig, btn.dataset.widgetHide, { visible: false });
-        rebuildDashboard(widgetConfig);
-      });
-    });
-  }
-
-  function rebuildDashboard(cfg) {
-    const shell = container.querySelector('#dashboard-shell');
-    if (!shell) return;
-    setHtml(shell, `
-      ${renderDashboardOverview(user, isCustomizing)}
-      ${renderTodayCockpit(data)}
-      ${renderDashboardLayout(cfg, data, weather, currency, { editing: isCustomizing })}
-    `);
-    wireLinks(container, rerender, { editing: isCustomizing });
-    if (window.lucide) window.lucide.createIcons({ el: shell });
-    wireWeatherRefresh(container, (updatedWeather) => {
-      weather = updatedWeather;
-      rebuildDashboard(cfg);
-    });
-    container.querySelector('#dashboard-customize-btn')?.addEventListener('click', () => {
-      isCustomizing = !isCustomizing;
-      if (!isCustomizing) {
-        cancelDashboardConfig();
-        return;
-      }
-      rebuildDashboard(widgetConfig);
-    }, { signal: _fabController.signal });
-    container.querySelector('#dashboard-manage-widgets')?.addEventListener('click', () => {
-      openCustomizeModal(widgetConfig, (newConfig) => {
-        widgetConfig = normalizeDashboardConfig(newConfig);
-        savedWidgetConfig = widgetConfig.map((w) => ({ ...w }));
-        isCustomizing = false;
-        rebuildDashboard(widgetConfig);
-      });
-    }, { signal: _fabController.signal });
-    container.querySelector('#dashboard-customize-save')?.addEventListener('click', saveDashboardConfig, { signal: _fabController.signal });
-    container.querySelector('#dashboard-customize-cancel')?.addEventListener('click', cancelDashboardConfig, { signal: _fabController.signal });
-    container.querySelector('#dashboard-customize-reset')?.addEventListener('click', resetDashboardConfig, { signal: _fabController.signal });
-    wireDashboardEditMode();
-  }
-
-  rebuildDashboard(widgetConfig);
-
-  initFab(container, _fabController.signal);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) return;
-    const titleEl = container.querySelector('.dashboard-overview__title');
-    if (titleEl) {
-      titleEl.replaceChildren();
-      titleEl.insertAdjacentHTML('afterbegin', greeting(user.display_name));
-    }
-    const dateEl  = container.querySelector('.dashboard-overview__date');
-    if (dateEl)  dateEl.textContent = formatDate(new Date());
-  }, { signal: _fabController.signal });
-
-  // 30-Minuten Auto-Refresh für Wetter
-  const refreshBtn = container.querySelector('#weather-refresh-btn');
-  if (refreshBtn) {
-    const doAutoRefresh = async () => {
-      try {
-        const res = await api.get(`/weather?lang=${encodeURIComponent(getLocale())}`).catch(() => ({ data: null }));
-        weather = res.data ?? null;
-        rebuildDashboard(widgetConfig);
-      } catch { /* silently ignore */ }
-    };
-    const timerId = setInterval(doAutoRefresh, 30 * 60 * 1000);
-    _fabController.signal.addEventListener('abort', () => clearInterval(timerId));
-  }
-
-  if (!localStorage.getItem(ONBOARDING_KEY)) {
-    setTimeout(() => showOnboarding(container), 400);
-  }
+  if (window.lucide) window.lucide.createIcons();
 }
 
-export const __test = { buildTodayHighlights };
+async function renderParentDashboard(grid, user) {
+  // 1. Pending Emergency Requests
+  const emCard = createCard('Emergency Requests', 'shield-alert', 'var(--color-danger)');
+  grid.appendChild(emCard);
 
-function wireWeatherRefresh(container, onUpdated = null) {
-  const refreshBtn = container.querySelector('#weather-refresh-btn');
-  if (!refreshBtn) return;
-  const doWeatherRefresh = async () => {
-    refreshBtn.disabled = true;
-    refreshBtn.classList.add('weather-widget__refresh--spinning');
-    try {
-      const res = await api.get(`/weather?lang=${encodeURIComponent(getLocale())}`).catch(() => ({ data: null }));
-      const wWidget = container.querySelector('#weather-widget');
-      if (wWidget) {
-        const wrapper = wWidget.closest('.widget-wrapper');
-        if (wrapper) {
-          wrapper.querySelector('.widget')?.remove();
-          wrapper.insertAdjacentHTML('beforeend', renderWeatherWidget(res.data ?? null));
+  try {
+    const res = await apiFetch('/reports/emergency');
+    const pending = (res.data || []).filter(r => r.status === 'pending');
+    
+    if (pending.length === 0) {
+      emCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>All clear! No pending requests.</div>`;
+    } else {
+      emCard.innerHTML += `<div style="color: var(--color-danger); font-weight: bold; margin-bottom: 12px;">You have ${pending.length} pending request(s).</div>`;
+      const btn = document.createElement('button');
+      btn.className = 'btn btn--primary';
+      btn.style.width = '100%';
+      btn.textContent = 'Review Requests';
+      btn.onclick = (e) => {
+        e.preventDefault();
+        window.oikos?.navigate('/reports');
+      };
+      emCard.appendChild(btn);
+    }
+  } catch(e) {
+    emCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load requests.</div>`;
+  }
+
+  // 2. Child Locations
+  const locCard = createCard('Family Locations', 'map-pin', 'var(--color-primary)');
+  grid.appendChild(locCard);
+
+  try {
+    const res = await apiFetch('/location');
+    const locations = res.data || [];
+    
+    if (locations.length === 0) {
+      locCard.innerHTML += `<div style="color: var(--text-muted);">No recent location data.</div>`;
+    } else {
+      const list = locations.map(l => {
+        const zoneDisplay = l.zone_name || (l.location_type === 'unknown' ? 'Transit' : l.location_type);
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle);">
+            <div style="font-weight: 500;">${l.display_name}</div>
+            <div style="color: ${l.location_type === 'danger' ? 'var(--color-danger)' : 'var(--text-secondary)'}; font-size: 13px; text-transform: capitalize;">
+              <i data-lucide="${l.location_type === 'danger' ? 'alert-triangle' : 'map'}" style="width: 14px; height: 14px; margin-right: 4px;"></i>${zoneDisplay}
+            </div>
+          </div>
+        `;
+      }).join('');
+      locCard.innerHTML += list;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--secondary';
+    btn.style.width = '100%';
+    btn.style.marginTop = '16px';
+    btn.textContent = 'View Live Map';
+    btn.onclick = (e) => {
+      e.preventDefault();
+      window.oikos?.navigate('/location');
+    };
+    locCard.appendChild(btn);
+  } catch(e) {
+    locCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load locations.</div>`;
+  }
+
+  // 3. Quick Links
+  const linksCard = createCard('Quick Actions', 'zap', 'var(--color-accent)');
+  grid.appendChild(linksCard);
+  
+  linksCard.innerHTML += `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <button class="btn btn--secondary" id="dash-link-calendar" style="justify-content: flex-start;"><i data-lucide="calendar"></i> Manage Daily Plan</button>
+      <button class="btn btn--secondary" id="dash-link-reports" style="justify-content: flex-start;"><i data-lucide="pie-chart"></i> View App Usage</button>
+    </div>
+  `;
+  
+  linksCard.querySelector('#dash-link-calendar').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/calendar'); };
+  linksCard.querySelector('#dash-link-reports').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/reports'); };
+}
+
+async function renderChildDashboard(grid, user) {
+  // 1. Rewards Balance
+  const rwCard = createCard('My Rewards', 'star', '#FF9500');
+  grid.appendChild(rwCard);
+
+  try {
+    const res = await apiFetch(`/reports/child/${user.id}`);
+    const points = res.data?.points || 0;
+    const streak = res.data?.current_streak || 0;
+    
+    rwCard.innerHTML += `
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div style="text-align: center; padding: 20px 0; flex: 1;">
+          <div style="font-size: 48px; font-weight: 900; color: #FF9500; text-shadow: 0 4px 15px rgba(255, 149, 0, 0.3);">${points}</div>
+          <div style="color: var(--text-secondary); font-size: 14px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Total Points</div>
+        </div>
+        ${streak > 0 ? `
+        <div style="background: linear-gradient(135deg, #FF3B30, #FF9500); color: white; padding: 8px 16px; border-radius: 12px; display: flex; align-items: center; gap: 8px; font-weight: bold; box-shadow: 0 4px 12px rgba(255,59,48,0.3); margin-top: 20px;">
+          <i data-lucide="flame" style="width: 18px; height: 18px;"></i> ${streak} Day Streak!
+        </div>` : ''}
+      </div>
+      <button class="btn" id="spend-points-btn" style="width: 100%; background: #FF9500; color: white; border: none; margin-top: 10px;">
+        Spend Points on Apps
+      </button>
+    `;
+    rwCard.querySelector('#spend-points-btn').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/apps'); };
+  } catch(e) {
+    rwCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load points.</div>`;
+  }
+
+  // 2. Today's Routines
+  const routineCard = createCard('Today\'s Routines', 'list-checks', 'var(--color-primary)');
+  grid.appendChild(routineCard);
+  
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await apiFetch(`/calendar?from=${today}&to=${today}&assigned_to=${user.id}`);
+    const routines = (res.data || []).filter(r => r.category === 'chore' || r.category === 'study' || r.category === 'medication');
+    
+    if (routines.length === 0) {
+      routineCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="calendar-check" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>No tasks for today. Enjoy!</div>`;
+    } else {
+      const list = document.createElement('div');
+      list.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
+      
+      routines.forEach(r => {
+        const isDone = r.status === 'done';
+        const item = document.createElement('div');
+        item.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg-body); border: 1px solid var(--color-border-subtle); opacity: ${isDone ? 0.6 : 1};`;
+        
+        item.innerHTML = `
+          <div>
+            <div style="font-weight: 600; font-size: 14px; text-decoration: ${isDone ? 'line-through' : 'none'};">${r.title}</div>
+            <div style="font-size: 11px; color: var(--text-secondary);">${r.start_time ? r.start_time.slice(0,5) : 'Anytime'}</div>
+          </div>
+        `;
+        
+        if (!isDone) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn--success btn--sm';
+          btn.style.padding = '4px 10px';
+          btn.innerHTML = '<i data-lucide="check" style="width: 14px; height: 14px;"></i>';
+          btn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btn.disabled = true;
+            try {
+              await apiFetch(`/calendar/${r.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+              showToast('Task marked as done!', 'success');
+              
+              const triggerConfetti = () => {
+                if (window.confetti) {
+                  window.confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                }
+              };
+
+              if (!window.confetti) {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
+                script.onload = triggerConfetti;
+                document.head.appendChild(script);
+              } else {
+                triggerConfetti();
+              }
+              
+              // Simple refresh: re-render the whole grid
+              grid.innerHTML = '';
+              await renderChildDashboard(grid, user);
+            } catch(err) {
+              showToast('Error marking task', 'danger');
+              btn.disabled = false;
+            }
+          };
+          item.appendChild(btn);
+        } else {
+          item.innerHTML += `<div style="color: var(--color-success);"><i data-lucide="check-circle" style="width: 20px; height: 20px;"></i></div>`;
         }
-        const newWidget = container.querySelector('#weather-widget');
-        if (newWidget && window.lucide) window.lucide.createIcons({ el: newWidget });
-        onUpdated?.(res.data ?? null);
-        window.oikos?.showToast(t('dashboard.weatherUpdated'), 'success', 1500);
+        list.appendChild(item);
+      });
+      routineCard.appendChild(list);
+      if (window.lucide) window.lucide.createIcons({ el: list });
+    }
+  } catch(e) {
+    routineCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load routines.</div>`;
+  }
+
+  // 3. Safety Check-in
+  const safeCard = createCard('Safety Check-In', 'shield-check', 'var(--color-success)');
+  grid.appendChild(safeCard);
+  
+  safeCard.innerHTML += `
+    <p style="color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px;">Arrived at school or home? Check in to let your parents know you are safe.</p>
+    <button class="btn btn--success" id="check-in-dash-btn" style="width: 100%;">
+      Check In Now
+    </button>
+  `;
+  safeCard.querySelector('#check-in-dash-btn').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/location'); };
+}
+
+function createCard(title, icon, color) {
+  const div = document.createElement('div');
+  div.style.cssText = `
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+  `;
+  
+  div.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+      <div style="width: 40px; height: 40px; border-radius: 12px; background: ${color}20; color: ${color}; display: flex; align-items: center; justify-content: center;">
+        <i data-lucide="${icon}"></i>
+      </div>
+      <h3 style="margin: 0; font-size: 18px;">${title}</h3>
+    </div>
+  `;
+  return div;
+}
+
+function showOnboardingWizard(container) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);';
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background: var(--bg-card); width: 100%; max-width: 500px; border-radius: 24px; padding: 40px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative;';
+  
+  let step = 1;
+  const steps = [
+    { title: 'Welcome to Digital Parent', desc: 'Let\'s set up your family environment. This wizard will guide you through adding your children and linking their devices.', icon: 'home' },
+    { title: 'Add a Child Account', desc: 'First, we need to create an account for your child. Enter their name and age to tailor their safety settings automatically.', icon: 'user-plus' },
+    { title: 'Configure Safe Zones', desc: 'Next, set up geofenced Safe Zones (like Home or School). You will be notified if they wander into a Danger Zone.', icon: 'map' },
+    { title: 'Set Up Screen Time', desc: 'Finally, establish their Daily Plan. Schedule study blocks, curfews, and assign chores so they can earn screen time.', icon: 'clock' }
+  ];
+
+  const renderStep = () => {
+    const s = steps[step-1];
+    modal.innerHTML = `
+      <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(0,122,255,0.1); color: var(--color-primary); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px auto;">
+        <i data-lucide="${s.icon}" style="width: 32px; height: 32px;"></i>
+      </div>
+      <h2 style="margin: 0 0 12px 0; font-size: 24px;">${s.title}</h2>
+      <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 32px;">${s.desc}</p>
+      
+      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 32px;">
+        ${steps.map((_, i) => `<div style="width: 8px; height: 8px; border-radius: 50%; background: ${i === step-1 ? 'var(--color-primary)' : 'var(--color-border)'}"></div>`).join('')}
+      </div>
+      
+      <div style="display: flex; gap: 16px;">
+        ${step > 1 ? `<button class="btn btn--ghost" id="wiz-prev" style="flex: 1;">Back</button>` : `<div style="flex:1"></div>`}
+        <button class="btn btn--primary" id="wiz-next" style="flex: 2;">${step === steps.length ? 'Finish Setup' : 'Continue'}</button>
+      </div>
+    `;
+    
+    if (window.lucide) window.lucide.createIcons({ el: modal });
+    
+    if (step > 1) {
+      modal.querySelector('#wiz-prev').onclick = (e) => { e.preventDefault(); step--; renderStep(); };
+    }
+    modal.querySelector('#wiz-next').onclick = (e) => {
+      e.preventDefault();
+      if (step === steps.length) {
+        localStorage.setItem('dp_setup_wizard', 'done');
+        overlay.remove();
+        showToast('Family setup complete!', 'success');
+      } else {
+        step++;
+        renderStep();
       }
-    } catch { /* silently ignore */ }
+    };
   };
-  refreshBtn.addEventListener('click', doWeatherRefresh, { signal: _fabController.signal });
+
+  renderStep();
+  overlay.appendChild(modal);
+  container.appendChild(overlay);
 }

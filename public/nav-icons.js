@@ -140,6 +140,39 @@ export const NAV_ICONS = {
     e('path', { d: 'M8 9h8M8 13h8M8 17h4' }),
   ),
 
+  'map-pin': () => makeSvg(
+    e('path', { d: 'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z' }),
+    e('circle', { cx: '12', cy: '10', r: '3' }),
+  ),
+
+  'file-bar-chart': () => makeSvg(
+    e('path', { d: 'M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z' }),
+    e('polyline', { points: '14 2 14 8 20 8' }),
+    e('path', { d: 'M12 18v-4M8 18v-2M16 18v-6' }),
+  ),
+
+  'smartphone': () => makeSvg(
+    e('rect', { x: '5', y: '2', width: '14', height: '20', rx: '2', ry: '2' }),
+    e('path', { d: 'M12 18h.01' }),
+  ),
+
+  'gamepad-2': () => makeSvg(
+    e('line', { x1: '6', y1: '12', x2: '10', y2: '12' }),
+    e('line', { x1: '8', y1: '10', x2: '8', y2: '14' }),
+    e('rect', { x: '2', y: '6', width: '20', height: '12', rx: '2' }),
+    e('circle', { cx: '17', cy: '10', r: '1' }),
+    e('circle', { cx: '15', cy: '13', r: '1' }),
+  ),
+
+  'message-circle': () => makeSvg(
+    e('path', { d: 'm3 21 1.9-1.9a9 9 0 1 1 3.8 3.8z' }),
+  ),
+
+  'graduation-cap': () => makeSvg(
+    e('path', { d: 'M22 10v6M2 10l10-5 10 5-10 5z' }),
+    e('path', { d: 'M6 12v5c3 3 9 3 12 0v-5' }),
+  ),
+
   'box': () => makeSvg(
     e('path', { d: 'M21 8L12 13 3 8' }),
     e('path', { d: 'M3 8l9-5 9 5v8l-9 5-9-5z' }),

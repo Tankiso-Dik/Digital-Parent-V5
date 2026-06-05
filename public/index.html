@@ -5,26 +5,19 @@
   <!-- Viewport: edge-to-edge, kein Zoom (PWA-native feel) -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" />
 
-  <!-- PWA / Theme -->
   <meta name="theme-color" content="#6c3aed" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#222220" media="(prefers-color-scheme: dark)" />
-  <meta name="mobile-web-app-capable" content="yes" />
-
   <!-- iOS-spezifisch -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Digital Parent" />
   <meta name="description" content="Digital Parent" />
   <title>Digital Parent</title>
 
-  <!-- PWA -->
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 
   <!-- DNS-Prefetch für externe Ressourcen -->
   <link rel="dns-prefetch" href="https://openweathermap.org" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Preload: kritische ES-Module (modulepreload ist korrekt für type="module") -->
   <link rel="modulepreload" href="/api.js" />
@@ -40,16 +33,23 @@
   <!-- Styles (Basis - seitenspezifische CSS wird vom Router on-demand geladen) -->
   <link rel="stylesheet" href="/styles/tokens.css" />
   <link rel="stylesheet" href="/styles/reset.css" />
-  <link rel="stylesheet" href="/styles/pwa.css" />
   <link rel="stylesheet" href="/styles/layout.css" />
   <link rel="stylesheet" href="/styles/glass.css" />
-  <link rel="stylesheet" href="/styles/sub-tabs.css" />
-  <link rel="stylesheet" href="/styles/kitchen-tabs.css" />
-  <link rel="stylesheet" href="/styles/user-multi-select.css" />
-  <link rel="stylesheet" href="/styles/login.css" />
+  <link rel="stylesheet" href="/styles/location.css" />
+  <link rel="stylesheet" href="/styles/reports.css" />
+  <link rel="stylesheet" href="/styles/apps.css" />
 
   <!-- Lucide Icons (lokal, v0.469.0) -->
   <script src="/lucide.min.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+  </script>
 </head>
 <body>
   <!-- Offline-Banner: sichtbar wenn navigator.onLine === false -->
@@ -80,11 +80,6 @@
   <script type="module" src="/api.js"></script>
   <script type="module" src="/router.js"></script>
 
-  <!-- Install-Prompt (PWA) -->
-  <oikos-install-prompt></oikos-install-prompt>
-  <script type="module" src="/components/oikos-install-prompt.js"></script>
-
-  <!-- Service Worker registrieren -->
-  <script src="/sw-register.js" defer></script>
+  <script type="module" src="/components/oikos-locale-picker.js"></script>
 </body>
 </html>

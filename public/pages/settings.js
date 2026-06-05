@@ -11,7 +11,9 @@ import { esc } from '/utils/html.js';
 import { renderSettingsSidebar, renderBreadcrumb, getLastActivePage, setActivePage, findSectionAndPage } from '/utils/settings-nav.js';
 import { renderSubTabs } from '/utils/sub-tabs.js';
 import '/components/oikos-locale-picker.js';
-import { getPwaInstallState, onPwaInstallStateChanged, promptPwaInstall } from '/utils/pwa-install.js';
+const getPwaInstallState = () => 'unavailable';
+const onPwaInstallStateChanged = () => {};
+const promptPwaInstall = async () => {};
 
 const SUPPORTED_CURRENCIES = ['AED', 'AUD', 'BRL', 'CAD', 'CHF', 'CNY', 'CZK', 'DKK', 'EUR', 'GBP', 'HUF', 'INR', 'JPY', 'NOK', 'PLN', 'RUB', 'SAR', 'SEK', 'TRY', 'UAH', 'USD'];
 const SETTINGS_TAB_KEY = 'oikos:settings:tab';

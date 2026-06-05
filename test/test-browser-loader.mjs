@@ -1,111 +1,54 @@
 /**
- * test-browser-loader.mjs - Node.js Custom Loader für Tests
- * Zweck: Browser-absolute Pfade (/foo.js) auf Stubs umleiten, damit
- *        Frontend-Module im Node-Test-Kontext importierbar sind.
- * Verwendung: node --loader ./test-browser-loader.mjs test-xxx.js
- * Dependencies: none
+ * Test Browser Loader
+ * Mocks a browser environment for Node.js tests.
  */
+import { GlobalWindow } from 'happy-dom';
 
-const STUBS = {
-  '/api.js': `
-    export const api = {
-      get: async () => ({ data: null }),
-      post: async () => ({ data: null }),
-      put: async () => ({ data: null }),
-      delete: async () => ({ data: null }),
-    };
-  `,
-  '/i18n.js': `
-    export const t = (key, values = {}) => {
-      if (!values || Object.keys(values).length === 0) return key;
-      return key + JSON.stringify(values);
-    };
-    export const initI18n = async () => {};
-    export const setLocale = async () => {};
-    export const getLocale = () => 'de';
-    export const getSupportedLocales = () => ['de', 'en'];
-    export const formatDate = (d) => String(d);
-    export const formatTime = (d) => String(d);
-    export const dateInputPlaceholder = () => 'YYYY-MM-DD';
-    export const formatDateInput = (d) => String(d ?? '');
-    export const parseDateInput = (d) => String(d ?? '');
-    export const isDateInputValid = () => true;
-    export const formatTimeInput = (d) => String(d ?? '');
-    export const parseTimeInput = (d) => String(d ?? '');
-    export const timeInputPlaceholder = () => 'HH:MM';
-  `,
-  '/rrule-ui.js': `
-    export const renderRRuleFields = () => '';
-    export const bindRRuleEvents = () => {};
-    export const getRRuleValues = () => ({});
-  `,
-  '/components/modal.js': `
-    export const openModal = () => {};
-    export const closeModal = () => {};
-    export const selectModal = async () => null;
-  `,
-  '/utils/ux.js': `
-    export const stagger = () => {};
-  `,
-  '/utils/html.js': `
-    export const esc = (value) => String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-    export const fmtLocation = (value) => String(value ?? '');
-    export const renderMarkdownLight = (value) => String(value ?? '');
-  `,
-  '/reminders.js': `
-    export const refresh = async () => {};
-  `,
-  '/components/user-multi-select.js': `
-    export const renderUserMultiSelect = () => '';
-    export const getSelectedUserIds = () => [];
-    export const bindUserMultiSelect = () => {};
-    export const renderAvatarStack = () => '';
-  `,
-  '/utils/shopping-categories.js': `
-    export const DEFAULT_CATEGORY_NAME = 'Sonstiges';
-    export const categoryLabel = (category) => category?.name ?? String(category ?? '');
-  `,
-  '/utils/kitchen-tabs.js': `
-    export const renderKitchenTabsBar = () => {};
-  `,
-  '/utils/date.js': `
-    const pad = (n) => String(n).padStart(2, '0');
-    export const toLocalDateKey = (date) => {
-      const d = date instanceof Date ? date : new Date(String(date) + 'T00:00:00');
-      return \`\${d.getFullYear()}-\${pad(d.getMonth() + 1)}-\${pad(d.getDate())}\`;
-    };
-    export const addLocalDays = (dateStr, days) => {
-      const d = new Date(String(dateStr) + 'T00:00:00');
-      d.setDate(d.getDate() + days);
-      return toLocalDateKey(d);
-    };
-    export const startOfLocalWeekKey = (dateStr, firstDay = 1) => {
-      const d = new Date(String(dateStr) + 'T00:00:00');
-      const day = d.getDay();
-      const diff = (day < firstDay ? day + 7 : day) - firstDay;
-      d.setDate(d.getDate() - diff);
-      return toLocalDateKey(d);
-    };
-  `,
+const window = new GlobalWindow();
+global.window = window;
+global.document = window.document;
+
+Object.defineProperty(global, 'navigator', {
+  value: window.navigator,
+  configurable: true,
+  writable: true
+});
+
+global.location = window.location;
+global.CustomEvent = window.CustomEvent;
+global.HTMLElement = window.HTMLElement;
+global.MutationObserver = window.MutationObserver;
+global.Node = window.Node;
+global.Request = window.Request;
+global.Response = window.Response;
+global.Headers = window.Headers;
+global.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+
+// Mock Lucide and other browser globals used in modules
+global.L = { 
+  map: () => ({ setView: () => ({}), on: () => ({}), remove: () => ({}) }),
+  tileLayer: () => ({ addTo: () => ({}) }),
+  marker: () => ({ addTo: () => ({ bindPopup: () => ({ openPopup: () => ({}) }) }), remove: () => ({}) }),
+  circle: () => ({ addTo: () => ({ bindPopup: () => ({}) }) })
 };
 
-export async function resolve(specifier, context, nextResolve) {
-  if (STUBS[specifier]) {
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join, dirname } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(__dirname, '../public');
+
+export async function resolve(specifier, context, defaultResolve) {
+  if (specifier.startsWith('/')) {
+    const filePath = join(publicDir, specifier);
     return {
-      shortCircuit: true,
-      url: `data:text/javascript,${encodeURIComponent(STUBS[specifier])}`,
+      url: pathToFileURL(filePath).href,
+      shortCircuit: true
     };
   }
-  // Browser-absolute paths (/foo.js, /utils/bar.js) → public/foo.js, public/utils/bar.js
-  // Loader liegt in test/, daher eine Ebene hoch ins Projekt-Root.
-  if (specifier.startsWith('/') && !specifier.startsWith('//')) {
-    const resolved = new URL('../public' + specifier, import.meta.url).href;
-    return nextResolve(resolved, context);
-  }
-  return nextResolve(specifier, context);
+  return defaultResolve(specifier, context, defaultResolve);
+}
+
+export async function load(url, context, defaultLoad) {
+  return defaultLoad(url, context, defaultLoad);
 }

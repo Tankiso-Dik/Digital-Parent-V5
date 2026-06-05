@@ -22,15 +22,13 @@ import { startScheduler as startBackupScheduler } from './services/backup-schedu
 import { startScheduler as startSplitExpenseScheduler } from './services/split-expenses-scheduler.js';
 import dashboardRouter from './routes/dashboard.js';
 import tasksRouter from './routes/tasks.js';
-import shoppingRouter from './routes/shopping.js';
-import mealsRouter from './routes/meals.js';
-import recipesRouter from './routes/recipes.js';
+
 import calendarRouter from './routes/calendar.js';
 import notesRouter from './routes/notes.js';
 import contactsRouter from './routes/contacts.js';
 import cardavRouter from './routes/cardav.js';
 import birthdaysRouter from './routes/birthdays.js';
-import budgetRouter from './routes/budget.js';
+
 import documentsRouter from './routes/documents.js';
 import splitExpensesRouter from './routes/split-expenses.js';
 import weatherRouter from './routes/weather.js';
@@ -39,6 +37,8 @@ import remindersRouter from './routes/reminders.js';
 import searchRouter from './routes/search.js';
 import familyRouter from './routes/family.js';
 import backupRouter from './routes/backup.js';
+import locationRouter from './routes/location.js';
+import reportsRouter from './routes/reports.js';
 import housekeepingRouter from './routes/housekeeping.js';
 import modulesRouter from './routes/modules.js';
 
@@ -62,9 +62,9 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:'],
+      scriptSrc: ["'self'", "https://unpkg.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+      imgSrc: ["'self'", 'data:', "https://*.openstreetmap.org", "https://unpkg.com"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
@@ -254,15 +254,11 @@ app.use('/api/v1', (req, res, next) => {
 app.use('/api/v1', csrfMiddleware);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/tasks', tasksRouter);
-app.use('/api/v1/shopping', shoppingRouter);
-app.use('/api/v1/meals', mealsRouter);
-app.use('/api/v1/recipes', recipesRouter);
 app.use('/api/v1/calendar', calendarRouter);
 app.use('/api/v1/notes', notesRouter);
 app.use('/api/v1/contacts/cardav', cardavRouter);
 app.use('/api/v1/contacts', contactsRouter);
 app.use('/api/v1/birthdays', birthdaysRouter);
-app.use('/api/v1/budget', budgetRouter);
 app.use('/api/v1/documents', documentsRouter);
 app.use('/api/v1/split-expenses', splitExpensesRouter);
 app.use('/api/v1/weather', weatherRouter);
@@ -271,6 +267,8 @@ app.use('/api/v1/reminders', remindersRouter);
 app.use('/api/v1/search', searchRouter);
 app.use('/api/v1/family', familyRouter);
 app.use('/api/v1/backup', backupRouter);
+app.use('/api/v1/location', locationRouter);
+app.use('/api/v1/reports', reportsRouter);
 app.use('/api/v1/housekeeping', housekeepingRouter);
 app.use('/api/v1/modules', modulesRouter);
 

@@ -64,7 +64,9 @@
     "section": {
       "household": "Hushåll"
     },
-    "reminders": "Påminnelser"
+    "reminders": "Påminnelser",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Översikt",
@@ -238,7 +240,10 @@
     "bulkSelect": "Välj flera",
     "bulkSelectedCount": "{{count}} har valts",
     "bulkStatusChanged": "Status ändrad.",
-    "selectTask": "Välj uppgift"
+    "selectTask": "Välj uppgift",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Shopping",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Bilaga uppladdad för kalenderhändelsen \"{{title}}\".",
     "agendaEmpty": "Inga händelser under vald period",
-    "taskChipAriaLabel": "Uppgift: {{title}}"
+    "taskChipAriaLabel": "Uppgift: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Anteckningar",

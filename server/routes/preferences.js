@@ -241,7 +241,8 @@ router.put('/', (req, res) => {
     }
 
     if (disabled_modules !== undefined) {
-      if (req.authRole !== 'admin') {
+      const isParent = req.authRole === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole || req.session?.family_role);
+      if (!isParent) {
         return res.status(403).json({ error: 'Admin access required.', code: 403 });
       }
       if (!Array.isArray(disabled_modules)) {

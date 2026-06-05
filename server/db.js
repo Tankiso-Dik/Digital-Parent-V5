@@ -89,7 +89,10 @@ const MIGRATIONS = [
         role          TEXT    NOT NULL DEFAULT 'member'
                               CHECK(role IN ('admin', 'member')),
         created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        points        INTEGER DEFAULT 0,
+        current_streak INTEGER DEFAULT 0,
+        highest_streak INTEGER DEFAULT 0
       );
 
       -- Aufgaben
@@ -1691,6 +1694,114 @@ const MIGRATIONS = [
                COALESCE(phone, '') || ' ' || COALESCE(email, '') FROM contacts;
       INSERT INTO search_index (entity, entity_id, title, body)
         SELECT 'item', id, COALESCE(name, ''), '' FROM shopping_items;
+    `,
+  },
+  {
+    version: 45,
+    description: 'Support for failed/unfinished status in tasks and events, and child location tracking',
+    up: `
+      -- Update tasks status check to include 'failed'
+      CREATE TABLE tasks_new (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        description     TEXT,
+        category        TEXT    NOT NULL DEFAULT 'misc',
+        priority        TEXT    NOT NULL DEFAULT 'none'
+                                CHECK(priority IN ('none', 'low', 'medium', 'high', 'urgent')),
+        status          TEXT    NOT NULL DEFAULT 'open'
+                                CHECK(status IN ('open', 'in_progress', 'done', 'archived', 'failed')),
+        due_date        TEXT,
+        due_time        TEXT,
+        start_date      TEXT,
+        assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_recurring    INTEGER NOT NULL DEFAULT 0,
+        recurrence_rule TEXT,
+        parent_task_id  INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      INSERT INTO tasks_new SELECT id, title, description, category, priority, status, due_date, due_time, start_date, assigned_to, created_by, is_recurring, recurrence_rule, parent_task_id, created_at, updated_at FROM tasks;
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_status         ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_assigned       ON tasks(assigned_to);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent         ON tasks(parent_task_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due            ON tasks(due_date);
+      CREATE INDEX IF NOT EXISTS idx_tasks_start_date     ON tasks(start_date);
+
+      -- Add status column to calendar_events
+      ALTER TABLE calendar_events ADD COLUMN status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'failed'));
+
+      -- Child location table
+      
+      CREATE TABLE IF NOT EXISTS family_zones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        zone_type TEXT NOT NULL CHECK(zone_type IN ('safe', 'school', 'danger')),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS child_locations (
+        user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        location_type TEXT,
+        lat           REAL,
+        lng           REAL,
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      -- Child app usage table
+      
+      CREATE TABLE IF NOT EXISTS emergency_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        app_type TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'denied')),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS child_app_usage (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        app_type      TEXT    NOT NULL CHECK(app_type IN ('social', 'games', 'school')),
+        minutes       INTEGER NOT NULL DEFAULT 0,
+        recorded_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_app_usage_user ON child_app_usage(user_id);
+    `,
+  },
+  {
+    version: 46,
+    description: 'Update child_locations and family_zones to allow more flexible types',
+    up: `
+      CREATE TABLE child_locations_new (
+        user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        location_type TEXT    NOT NULL CHECK(location_type IN ('school', 'park', 'danger', 'safe')),
+        lat           REAL    NOT NULL DEFAULT 0.0,
+        lng           REAL    NOT NULL DEFAULT 0.0,
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      INSERT INTO child_locations_new (user_id, location_type, updated_at, lat, lng)
+      SELECT user_id, location_type, updated_at, 0.0, 0.0 FROM child_locations;
+      DROP TABLE child_locations;
+      ALTER TABLE child_locations_new RENAME TO child_locations;
+
+      CREATE TABLE family_zones_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        zone_type TEXT NOT NULL CHECK(zone_type IN ('safe', 'school', 'danger', 'park')),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      INSERT INTO family_zones_new SELECT * FROM family_zones;
+      DROP TABLE family_zones;
+      ALTER TABLE family_zones_new RENAME TO family_zones;
     `,
   },
 ];

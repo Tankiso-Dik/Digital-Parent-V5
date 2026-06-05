@@ -15,7 +15,8 @@ const log = createLogger('Modules');
 
 router.get('/', async (req, res) => {
   try {
-    const admin = req.authRole === 'admin' && req.query.admin === '1';
+    const isParent = req.authRole === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole || req.session?.family_role);
+    const admin = isParent && req.query.admin === '1';
     const modules = await listModules({ admin });
     res.json({ data: modules });
   } catch (err) {

@@ -8,7 +8,6 @@ import { api, auth } from '/api.js';
 import { initI18n, getLocale, t } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { init as initReminders, stop as stopReminders } from '/reminders.js';
-import { isKitchenRoute, getLastKitchenRoute } from '/utils/kitchen-tabs.js';
 import { NAV_ICONS } from '/nav-icons.js';
 
 // --------------------------------------------------------
@@ -18,18 +17,14 @@ import { NAV_ICONS } from '/nav-icons.js';
 const ROUTES = [
   { path: '/login',    page: '/pages/login.js',    requiresAuth: false, module: null        },
   { path: '/',         page: '/pages/dashboard.js', requiresAuth: true, module: 'dashboard' },
-  { path: '/tasks',    page: '/pages/tasks.js',     requiresAuth: true, module: 'tasks'     },
-  { path: '/shopping', page: '/pages/shopping.js',  requiresAuth: true, module: 'shopping'  },
-  { path: '/meals',    page: '/pages/meals.js',     requiresAuth: true, module: 'meals'     },
-  { path: '/calendar', page: '/pages/calendar.js',  requiresAuth: true, module: 'calendar'  },
   { path: '/birthdays', page: '/pages/birthdays.js', requiresAuth: true, module: 'birthdays' },
-  { path: '/notes',    page: '/pages/notes.js',     requiresAuth: true, module: 'notes'     },
-  { path: '/recipes',  page: '/pages/recipes.js',   requiresAuth: true, module: 'recipes'   },
+  { path: '/calendar',  page: '/pages/calendar.js',  requiresAuth: true, module: 'calendar'  },
   { path: '/contacts', page: '/pages/contacts.js',  requiresAuth: true, module: 'contacts'  },
-  { path: '/budget',   page: '/pages/budget.js',    requiresAuth: true, module: 'budget'    },
   { path: '/documents', page: '/pages/documents.js', requiresAuth: true, module: 'documents' },
-  { path: '/housekeeping', page: '/pages/housekeeping.js', requiresAuth: true, module: 'housekeeping' },
   { path: '/settings', page: '/pages/settings.js',  requiresAuth: true, module: 'settings'  },
+  { path: '/location', page: '/pages/location.js',  requiresAuth: true, module: 'location'  },
+  { path: '/reports',  page: '/pages/reports.js',   requiresAuth: true, module: 'reports'   },
+  { path: '/apps',     page: '/pages/apps.js',      requiresAuth: true, module: 'apps'      },
 ];
 
 // --------------------------------------------------------
@@ -139,8 +134,7 @@ let _pendingLoginRedirect = false;
 // Router
 // --------------------------------------------------------
 
-const ROUTE_ORDER = ['/', '/calendar', '/tasks', '/meals', '/recipes', '/shopping',
-                     '/birthdays', '/notes', '/contacts', '/budget', '/documents', '/housekeeping', '/settings'];
+const ROUTE_ORDER = ['/', '/calendar', '/birthdays', '/contacts', '/documents', '/location', '/reports', '/apps', '/settings'];
 
 const PRIMARY_NAV = 4;
 
@@ -184,18 +178,14 @@ function setAppVersion(version) {
 function routeTitle(path) {
   const map = {
     '/': t('dashboard.title'),
-    '/tasks': t('nav.tasks'),
-    '/calendar': t('nav.calendar'),
+    '/calendar': 'Daily Plan',
     '/birthdays': t('nav.birthdays'),
-    '/meals': t('nav.meals'),
-    '/recipes': t('nav.recipes'),
-    '/shopping': t('nav.shopping'),
-    '/notes': t('nav.notes'),
     '/contacts': t('nav.contacts'),
-    '/budget': t('nav.budget'),
     '/documents': t('nav.documents'),
-    '/housekeeping': t('nav.housekeeping'),
     '/settings': t('nav.settings'),
+    '/location': 'Location',
+    '/reports': 'Reports',
+    '/apps': 'Apps',
   };
   return map[path] || _thirdPartyModules.find((module) => module.route?.path === path)?.menu?.label || getAppName();
 }
@@ -313,10 +303,10 @@ async function navigate(path, userOrPushState = true, pushState = true) {
 
     let route = allRoutes().find((r) => r.path === basePath) ?? ROUTES.find((r) => r.path === '/');
 
-    if (currentUser?.access_scope === 'split_guest' && route.path !== '/budget') {
+    if (currentUser?.access_scope === 'split_guest' && route.path !== '/') {
       currentPath = null;
       isNavigating = false;
-      navigate('/budget');
+      navigate('/');
       return;
     }
 
@@ -355,10 +345,10 @@ async function navigate(path, userOrPushState = true, pushState = true) {
 
     route = allRoutes().find((r) => r.path === basePath) ?? route;
 
-    if (currentUser?.access_scope === 'split_guest' && route.path !== '/budget') {
+    if (currentUser?.access_scope === 'split_guest' && route.path !== '/') {
       currentPath = null;
       isNavigating = false;
-      navigate('/budget');
+      navigate('/');
       return;
     }
 
@@ -898,14 +888,8 @@ const SHORTCUTS = [
   { key: 'n',   description: () => t('shortcuts.new'),     action: () => document.querySelector('.page-fab')?.click() },
   { key: '?',   description: () => t('shortcuts.help'),    action: () => showShortcutsModal() },
   { key: 'g d', description: () => t('shortcuts.goDash'),  action: () => navigate('/') },
-  { key: 'g t', description: () => t('shortcuts.goTasks'), action: () => navigate('/tasks') },
-  { key: 'g c', description: () => t('shortcuts.goCal'),   action: () => navigate('/calendar') },
-  { key: 'g s', description: () => t('shortcuts.goShop'),  action: () => navigate('/shopping') },
-  { key: 'g n', description: () => t('shortcuts.goNotes'),   action: () => navigate('/notes')              },
-  { key: 'g k',   description: () => t('shortcuts.goKitchen'), action: () => navigate(getLastKitchenRoute()) },
-  { key: 'g k m', description: () => t('shortcuts.goKitchen'), action: () => navigate('/meals')             },
-  { key: 'g k r', description: () => t('shortcuts.goKitchen'), action: () => navigate('/recipes')           },
-  { key: 'g k s', description: () => t('shortcuts.goKitchen'), action: () => navigate('/shopping')          },
+  { key: 'g c', description: () => 'Go to Daily Plan',  action: () => navigate('/calendar') },
+  { key: 'g b', description: () => t('shortcuts.goBirthdays'), action: () => navigate('/birthdays')},
 ];
 
 let _pendingKey = null;
@@ -1266,32 +1250,35 @@ function renderSearchResults(container, data, onClose) {
   makeSection('nav.calendar', events,   (i) => `/calendar?open=${i.id}`);
   makeSection('nav.notes',    notes,    (i) => `/notes?open=${i.id}`);
   makeSection('nav.contacts', contacts, (i) => `/contacts?open=${i.id}`);
-  makeSection('nav.shopping', items,    (i) => `/shopping?list=${i.list_id}&highlight=${i.id}`);
+  
 }
 
 function navItems() {
   if (currentUser?.access_scope === 'split_guest') {
     return [
-      { path: '/budget', label: t('splitExpenses.tabLabel'), icon: 'receipt-text', module: 'budget' },
+      { path: '/', label: 'Dashboard', icon: 'home', module: 'dashboard' },
     ];
   }
+  const isParent = currentUser?.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(currentUser?.family_role);
+  
   const baseItems = [
     { path: '/',          label: t('nav.dashboard'), icon: 'layout-dashboard', module: 'dashboard' },
-    { path: '/calendar',  label: t('nav.calendar'),  icon: 'calendar',         module: 'calendar'  },
-    { path: '/tasks',     label: t('nav.tasks'),     icon: 'check-square',     module: 'tasks'     },
-    { path: '/notes',     label: t('nav.notes'),     icon: 'sticky-note',      module: 'notes'     },
-    // More-Sheet Items:
-    { path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' },
-    { path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  },
-    { path: '/budget',    label: t('nav.budget'),    icon: 'wallet',           module: 'budget'    },
-    { path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' },
-    { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'paintbrush', module: 'housekeeping' },
-    { path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  },
-    // Kitchen-Gruppe: via Küche-Nav-Button (Bottom-Nav + Sidebar) + kitchen-tabs-bar erreichbar
-    // { path: '/meals',     label: t('nav.meals'),     icon: 'utensils',      module: 'meals',    kitchenGroup: true },
-    // { path: '/recipes',   label: t('nav.recipes'),   icon: 'book-text',     module: 'recipes',  kitchenGroup: true },
-    // { path: '/shopping',  label: t('nav.shopping'),  icon: 'shopping-cart', module: 'shopping', kitchenGroup: true },
+    { path: '/calendar', label: 'Daily Plan', icon: 'calendar', module: 'calendar' },
+    
+    { path: '/location',  label: 'Location',         icon: 'map-pin',          module: 'location'  },
   ];
+  if (isParent) {
+    baseItems.push({ path: '/reports',   label: 'Reports',          icon: 'activity',         module: 'reports'   });
+    baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
+    baseItems.push({ path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' });
+    baseItems.push({ path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  });
+    baseItems.push({ path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' });
+  } else {
+    baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
+  }
+  
+  baseItems.push({ path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  });
+
   const thirdPartyItems = _thirdPartyModules
     .filter((module) => module.enabled && module.status === 'enabled' && module.menu?.show && module.route?.path)
     .map((module) => ({
@@ -1327,18 +1314,11 @@ function sidebarNavItems() {
   indicator.setAttribute('aria-hidden', 'true');
   elements.push(indicator);
 
-  let kitchenAdded = false;
-  let nonKitchenCount = 0;
+    let nonKitchenCount = 0;
   let sectionAdded = false;
 
   navItems().forEach((item) => {
-    if (item.kitchenGroup) {
-      if (!kitchenAdded) {
-        elements.push(sidebarKitchenEl());
-        kitchenAdded = true;
-      }
-      return;
-    }
+    
     // Abschnittsbezeichnung vor dem (PRIMARY_NAV+1)ten Nicht-Küche-Eintrag
     if (!sectionAdded && nonKitchenCount === PRIMARY_NAV) {
       sectionAdded = true;
@@ -1862,15 +1842,9 @@ function rebuildNavigation({ updateLabels = true } = {}) {
     requestAnimationFrame(() => positionSidebarIndicator());
   }
   if (bottomItems) {
-    const kitchenBtnEl = bottomItems.querySelector('#kitchen-btn');
     const moreBtn      = bottomItems.querySelector('#more-btn');
-    const kitchenVisible = ['meals', 'recipes', 'shopping'].some((m) => !_disabledModules.has(m));
-    if (kitchenBtnEl) {
-      kitchenBtnEl.querySelector('.nav-item__label').textContent = t('nav.kitchen');
-      kitchenBtnEl.hidden = !kitchenVisible;
-    }
     const newItems = navItems().filter((item) => !item.kitchenGroup).slice(0, PRIMARY_NAV).map(navItemEl);
-    const tail = [kitchenBtnEl, moreBtn].filter(Boolean);
+    const tail = [moreBtn].filter(Boolean);
     bottomItems.replaceChildren(...newItems, ...tail);
     requestAnimationFrame(() => positionTabIndicator());
   }

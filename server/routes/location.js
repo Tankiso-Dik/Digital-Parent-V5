@@ -1,0 +1,81 @@
+import express from 'express';
+import * as db from '../db.js';
+import { createLogger } from '../logger.js';
+
+const log = createLogger('Location');
+const router = express.Router();
+
+router.get('/', (req, res) => {
+  try {
+    const user = db.get().prepare('SELECT id, role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    
+    if (isParent) {
+      const locations = db.get().prepare(`
+        SELECT cl.*, u.display_name
+        FROM child_locations cl
+        JOIN users u ON u.id = cl.user_id
+        WHERE u.family_role = 'child'
+      `).all();
+      return res.json({ data: locations });
+    } else {
+      const location = db.get().prepare('SELECT * FROM child_locations WHERE user_id = ?').get(req.authUserId);
+      return res.json({ data: location ? [location] : [] });
+    }
+  } catch (err) {
+    log.error('GET / error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.post('/', (req, res) => {
+  try {
+    const { location_type, lat, lng, zone_name } = req.body;
+    if (!['school', 'park', 'danger', 'safe', 'unknown', 'transit'].includes(location_type)) {
+      return res.status(400).json({ error: 'Invalid location type.' });
+    }
+    
+    db.get().prepare(`
+      INSERT INTO child_locations (user_id, location_type, lat, lng, zone_name, updated_at)
+      VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      ON CONFLICT(user_id) DO UPDATE SET
+        location_type = excluded.location_type,
+        lat = excluded.lat,
+        lng = excluded.lng,
+        zone_name = excluded.zone_name,
+        updated_at = excluded.updated_at
+    `).run(req.authUserId, location_type, lat || 0, lng || 0, zone_name || null);
+    
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('POST / error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+router.get('/zones', (req, res) => {
+  try {
+    const zones = db.get().prepare('SELECT * FROM family_zones').all();
+    res.json({ data: zones });
+  } catch (err) {
+    log.error('GET /zones error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.post('/zones', (req, res) => {
+  try {
+    const { name, lat, lng, zone_type } = req.body;
+    db.get().prepare(`
+      INSERT INTO family_zones (name, lat, lng, zone_type)
+      VALUES (?, ?, ?, ?)
+    `).run(name, lat, lng, zone_type);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('POST /zones error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+export default router;

@@ -407,7 +407,7 @@ function housekeepingDashboard() {
 }
 
 function assertAdmin(req, res) {
-  if (req.authRole === 'admin') return true;
+  if (req.authRole === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole || req.session?.family_role)) return true;
   res.status(403).json({ error: 'Permission denied.', code: 403 });
   return false;
 }

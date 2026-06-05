@@ -64,7 +64,9 @@
     "section": {
       "household": "Casa"
     },
-    "reminders": "Lembretes"
+    "reminders": "Lembretes",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Painel",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Compras",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Anexo enviado para o evento \"{{title}}\" do calendário.",
     "agendaEmpty": "Nenhum evento no período selecionado",
-    "taskChipAriaLabel": "Tarefa: {{title}}"
+    "taskChipAriaLabel": "Tarefa: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Quadro de notas",

@@ -153,4 +153,4 @@ const auth = {
   deleteUser: (id) => api.delete(`/auth/users/${id}`),
 };
 
-export { api, auth, ApiError };
+export { api, auth, apiFetch, ApiError };

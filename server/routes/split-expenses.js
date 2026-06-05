@@ -36,7 +36,7 @@ function splitGuestGroupId(req) {
 }
 
 function isSystemAdmin(req) {
-  return req.authRole === 'admin' || req.session?.role === 'admin';
+  return req.authRole === 'admin' || req.session?.role === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole || req.session?.family_role);
 }
 
 function defaultCurrency() {

@@ -64,7 +64,9 @@
     "section": {
       "household": "Gospodarstwo"
     },
-    "reminders": "Przypomnienia"
+    "reminders": "Przypomnienia",
+    "location": "Location",
+    "reports": "Reports"
   },
   "search": {
     "title": "Szukaj",
@@ -244,7 +246,10 @@
     "reminderNeedsDueDate": "Ustaw datę terminu, aby włączyć przypomnienia o zadaniu.",
     "startDateLabel": "Data rozpoczęcia",
     "startsOn": "Zaczyna się {{date}}",
-    "showFuture": "Pokaż zaplanowane"
+    "showFuture": "Pokaż zaplanowane",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Zakupy",
@@ -529,7 +534,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Załącznik do wpisu kalendarza \"{{title}}\" przesłany.",
     "agendaEmpty": "Brak wydarzeń w wybranym zakresie",
-    "taskChipAriaLabel": "Zadanie: {{title}}"
+    "taskChipAriaLabel": "Zadanie: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Notatki",

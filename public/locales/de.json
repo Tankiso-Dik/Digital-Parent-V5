@@ -64,7 +64,9 @@
     "section": {
       "household": "Haushalt"
     },
-    "reminders": "Erinnerungen"
+    "reminders": "Erinnerungen",
+    "location": "Location",
+    "reports": "Reports"
   },
   "search": {
     "title": "Suche",
@@ -244,7 +246,10 @@
     "reminderNeedsDueDate": "Lege ein Fälligkeitsdatum fest, um Aufgabenerinnerungen zu aktivieren.",
     "startDateLabel": "Startdatum",
     "startsOn": "Startet am {{date}}",
-    "showFuture": "Geplante anzeigen"
+    "showFuture": "Geplante anzeigen",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Einkauf",
@@ -529,7 +534,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Anhang für Kalendereintrag \"{{title}}\" hochgeladen.",
     "agendaEmpty": "Keine Termine im ausgewählten Zeitraum",
-    "taskChipAriaLabel": "Aufgabe: {{title}}"
+    "taskChipAriaLabel": "Aufgabe: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Notizen",

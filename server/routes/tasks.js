@@ -19,7 +19,7 @@ const router = express.Router();
 // --------------------------------------------------------
 
 const VALID_PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'];
-const VALID_STATUSES   = ['open', 'in_progress', 'done', 'archived'];
+const VALID_STATUSES   = ['open', 'in_progress', 'done', 'archived', 'failed'];
 const VALID_CATEGORIES = ['household', 'school', 'shopping', 'repair',
                           'health', 'finance', 'leisure', 'misc'];
 

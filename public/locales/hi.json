@@ -64,7 +64,9 @@
     "section": {
       "household": "घरेलू"
     },
-    "reminders": "रिमाइंडर"
+    "reminders": "रिमाइंडर",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "डैशबोर्ड",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "खरीदारी",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "कैलेंडर इवेंट \"{{title}}\" के लिए अपलोड किया गया अटैचमेंट।",
     "agendaEmpty": "चुनी गई अवधि में कोई कार्यक्रम नहीं",
-    "taskChipAriaLabel": "कार्य: {{title}}"
+    "taskChipAriaLabel": "कार्य: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "नोट बोर्ड",

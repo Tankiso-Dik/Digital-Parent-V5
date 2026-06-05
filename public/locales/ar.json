@@ -64,7 +64,9 @@
     "section": {
       "household": "المنزل"
     },
-    "reminders": "التذكيرات"
+    "reminders": "التذكيرات",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "لوحة التحكم",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "التسوق",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "مرفق تم رفعه لحدث التقويم \"{{title}}\".",
     "agendaEmpty": "لا توجد مواعيد في الفترة المحددة",
-    "taskChipAriaLabel": "مهمة: {{title}}"
+    "taskChipAriaLabel": "مهمة: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "لوحة الملاحظات",

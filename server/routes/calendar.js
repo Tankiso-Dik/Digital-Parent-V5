@@ -20,6 +20,7 @@ const log = createLogger('Calendar');
 
 const router         = express.Router();
 
+const VALID_STATUSES = ['open', 'done', 'failed'];
 const VALID_SOURCES  = ['local', 'google', 'apple', 'ics'];
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_ATTACHMENT_FOLDER = 'Calendar items';
@@ -65,7 +66,8 @@ function getUserId(req) {
 }
 
 function isAdminUser(req) {
-  return req.authRole === 'admin' || req.session?.isAdmin === true || req.session?.role === 'admin';
+  const isParent = req.authRole === 'admin' || req.session?.isAdmin === true || req.session?.role === 'admin' || ['parent', 'mom', 'dad', 'grandparent'].includes(req.authFamilyRole || req.session?.family_role);
+  return isParent;
 }
 
 function eventIcon(value) {
@@ -288,8 +290,9 @@ router.get('/', (req, res) => {
     const params = [to, from, to, getUserId(req)];
 
     if (req.query.assigned_to) {
-      sql += ' AND EXISTS (SELECT 1 FROM event_assignments ea WHERE ea.event_id = e.id AND ea.user_id = ?)';
-      params.push(parseInt(req.query.assigned_to, 10));
+      sql += ' AND (e.assigned_to = ? OR EXISTS (SELECT 1 FROM event_assignments ea WHERE ea.event_id = e.id AND ea.user_id = ?))';
+      const aid = parseInt(req.query.assigned_to, 10);
+      params.push(aid, aid);
     }
 
     if (req.query.source && VALID_SOURCES.includes(req.query.source)) {
@@ -297,9 +300,17 @@ router.get('/', (req, res) => {
       params.push(req.query.source);
     }
 
+    if (req.query.status && VALID_STATUSES.includes(req.query.status)) {
+      sql += ' AND e.status = ?';
+      params.push(req.query.status);
+    }
+
     sql += ' ORDER BY e.start_datetime ASC, e.all_day DESC';
 
+    console.log('[DEBUG GET /calendar] SQL:', sql);
+    console.log('[DEBUG GET /calendar] Params:', params);
     const rawEvents = db.get().prepare(sql).all(...params);
+    console.log('[DEBUG GET /calendar] rawEvents count:', rawEvents.length);
     const events    = expandRecurringEvents(rawEvents, from, to).map(serializeEvent);
     res.json({ data: events, from, to });
   } catch (err) {
@@ -689,7 +700,7 @@ router.post('/', (req, res) => {
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     if (!vIcon) return res.status(400).json({ error: 'icon: invalid calendar event icon.', code: 400 });
 
-    const { all_day = 0 } = req.body;
+    const { all_day = 0, status = 'open' } = req.body;
     const userIds  = parseAssignedTo(req.body.assigned_to);
     const firstUid = userIds[0] ?? null;
 
@@ -701,8 +712,8 @@ router.post('/', (req, res) => {
         INSERT INTO calendar_events
           (title, description, start_datetime, end_datetime, all_day,
            location, color, icon, assigned_to, created_by, recurrence_rule,
-           attachment_name, attachment_mime, attachment_size, attachment_data, attachment_document_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           attachment_name, attachment_mime, attachment_size, attachment_data, attachment_document_id, status, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         vTitle.value, vDesc.value,
         vStart.value, vEnd.value,
@@ -713,7 +724,9 @@ router.post('/', (req, res) => {
         attachment.mime,
         attachment.size,
         attachment.data,
-        documentId
+        documentId,
+        status,
+        req.body.category || 'chore'
       );
       setEventAssignments(db.get(), result.lastInsertRowid, userIds);
       return result.lastInsertRowid;
@@ -739,6 +752,50 @@ router.post('/', (req, res) => {
 });
 
 // --------------------------------------------------------
+// PATCH /api/v1/calendar/:id
+// Update status and award points
+// --------------------------------------------------------
+router.patch('/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { status } = req.body;
+    
+    if (status) {
+      if (status === 'done') {
+        const event = db.get().prepare('SELECT status, assigned_to, category FROM calendar_events WHERE id = ?').get(id);
+        if (event && event.status !== 'done') {
+          db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+          if (event.assigned_to && (event.category === 'chore' || event.category === 'study' || event.category === 'medication')) {
+            db.get().prepare(`
+              UPDATE users 
+              SET points = COALESCE(points, 0) + 10,
+                  current_streak = COALESCE(current_streak, 0) + 1,
+                  highest_streak = MAX(COALESCE(highest_streak, 0), COALESCE(current_streak, 0) + 1)
+              WHERE id = ?
+            `).run(event.assigned_to);
+          }
+        } else {
+          db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+        }
+      } else if (status === 'failed') {
+        const event = db.get().prepare('SELECT assigned_to FROM calendar_events WHERE id = ?').get(id);
+        db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+        if (event && event.assigned_to) {
+          db.get().prepare('UPDATE users SET current_streak = 0 WHERE id = ?').run(event.assigned_to);
+        }
+      } else {
+        db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+      }
+    }
+    
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('PATCH error', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// --------------------------------------------------------
 // PUT /api/v1/calendar/:id
 // Termin vollständig aktualisieren.
 // Body: alle Felder optional außer title + start_datetime
@@ -750,6 +807,11 @@ router.put('/:id', (req, res) => {
     const event = db.get().prepare('SELECT * FROM calendar_events WHERE id = ?').get(id);
     if (!event) return res.status(404).json({ error: 'Termin nicht gefunden', code: 404 });
 
+    const user = db.get().prepare('SELECT family_role FROM users WHERE id = ?').get(getUserId(req));
+    if (user?.family_role === 'child' && (event.category === 'curfew' || event.category === 'study' || event.category === 'chore')) {
+      return res.status(403).json({ error: 'Children cannot modify study, curfew, or chore blocks.', code: 403 });
+    }
+
     const checks = [];
     if (req.body.title          !== undefined) checks.push(str(req.body.title, 'Titel', { max: MAX_TITLE, required: false }));
     if (req.body.description    !== undefined) checks.push(str(req.body.description, 'Beschreibung', { max: MAX_TEXT, required: false }));
@@ -758,6 +820,8 @@ router.put('/:id', (req, res) => {
     if (req.body.color          !== undefined) checks.push(color(req.body.color, 'Farbe'));
     if (req.body.location       !== undefined) checks.push(str(req.body.location, 'Ort', { max: MAX_TITLE, required: false }));
     if (req.body.recurrence_rule !== undefined) checks.push(rrule(req.body.recurrence_rule, 'Wiederholung'));
+    if (req.body.status          !== undefined && !VALID_STATUSES.includes(req.body.status))
+      return res.status(400).json({ error: `Invalid status. Allowed: ${VALID_STATUSES.join(', ')}`, code: 400 });
     const errors = collectErrors(checks);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     const vIcon = req.body.icon !== undefined ? eventIcon(req.body.icon) : event.icon;
@@ -773,6 +837,7 @@ router.put('/:id', (req, res) => {
     const {
       title, description, start_datetime, end_datetime,
       all_day, location, color: colorVal, recurrence_rule, attachment_name,
+      status = event.status,
     } = req.body;
 
     const userIds  = req.body.assigned_to !== undefined
@@ -804,7 +869,8 @@ router.put('/:id', (req, res) => {
             attachment_size  = ?,
             attachment_data  = ?,
             attachment_document_id = ?,
-            user_modified   = ?
+            user_modified   = ?,
+            status          = ?
         WHERE id = ?
       `).run(
         title?.trim()  ?? null,
@@ -823,6 +889,7 @@ router.put('/:id', (req, res) => {
         attachment.data,
         documentId,
         userModified,
+        status,
         id
       );
       setEventAssignments(db.get(), id, userIds);
@@ -887,7 +954,15 @@ router.post('/:id/reset', (req, res) => {
 // --------------------------------------------------------
 router.delete('/:id', (req, res) => {
   try {
-    const id     = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id, 10);
+    const event = db.get().prepare('SELECT * FROM calendar_events WHERE id = ?').get(id);
+    if (!event) return res.status(404).json({ error: 'Termin nicht gefunden', code: 404 });
+
+    const user = db.get().prepare('SELECT family_role FROM users WHERE id = ?').get(getUserId(req));
+    if (user?.family_role === 'child' && (event.category === 'curfew' || event.category === 'study' || event.category === 'chore')) {
+      return res.status(403).json({ error: 'Children cannot delete study, curfew, or chore blocks.', code: 403 });
+    }
+
     const result = db.get().prepare('DELETE FROM calendar_events WHERE id = ?').run(id);
     if (result.changes === 0)
       return res.status(404).json({ error: 'Termin nicht gefunden', code: 404 });

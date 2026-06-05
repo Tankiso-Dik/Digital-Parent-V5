@@ -64,7 +64,9 @@
     "section": {
       "household": "家庭"
     },
-    "reminders": "提醒"
+    "reminders": "提醒",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "概览",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "购物",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "为日历事件“{{title}}”上传的附件。",
     "agendaEmpty": "所选时间范围内没有日程",
-    "taskChipAriaLabel": "任务：{{title}}"
+    "taskChipAriaLabel": "任务：{{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "便签板",

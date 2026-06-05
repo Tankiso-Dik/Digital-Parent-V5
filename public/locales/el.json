@@ -64,7 +64,9 @@
     "section": {
       "household": "Νοικοκυριό"
     },
-    "reminders": "Υπενθυμίσεις"
+    "reminders": "Υπενθυμίσεις",
+    "location": "Location",
+    "reports": "Reports"
   },
   "dashboard": {
     "title": "Επισκόπηση",
@@ -238,7 +240,10 @@
     "bulkSelect": "Bulk select",
     "bulkSelectedCount": "{{count}} selected",
     "bulkStatusChanged": "Status changed.",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "statusFailed": "Failed",
+    "markFailed": "Mark {{title}} as failed",
+    "swipedFailedToast": "Marked as failed."
   },
   "shopping": {
     "title": "Αγορές",
@@ -523,7 +528,12 @@
     "attachmentDocumentName": "{{title}} - {{name}}",
     "attachmentDocumentDescription": "Συνημμένο που ανέβηκε για το συμβάν ημερολογίου \"{{title}}\".",
     "agendaEmpty": "Δεν υπάρχουν ραντεβού στο επιλεγμένο διάστημα",
-    "taskChipAriaLabel": "Εργασία: {{title}}"
+    "taskChipAriaLabel": "Εργασία: {{title}}",
+    "statusFailed": "Failed",
+    "statusOpen": "Open",
+    "statusDone": "Done",
+    "statusLabel": "Status",
+    "status": "Status"
   },
   "notes": {
     "title": "Σημειώσεις",

@@ -1,0 +1,47 @@
+.apps-page {
+  padding: var(--space-4);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.app-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-card__icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-2);
+}
+
+.app-card__icon i {
+  width: 32px;
+  height: 32px;
+}
+
+.app-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  width: 100%;
+}
+
+.app-card__actions .btn {
+  flex: 1;
+}
