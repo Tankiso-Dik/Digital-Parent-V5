@@ -1841,6 +1841,23 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 50,
+    description: 'Allow unknown and transit in child_locations location_type check constraint',
+    up: `
+      CREATE TABLE child_locations_new (
+        user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        location_type TEXT    NOT NULL CHECK(location_type IN ('school', 'park', 'danger', 'safe', 'unknown', 'transit')),
+        lat           REAL    NOT NULL DEFAULT 0.0,
+        lng           REAL    NOT NULL DEFAULT 0.0,
+        updated_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        zone_name     TEXT
+      );
+      INSERT INTO child_locations_new SELECT * FROM child_locations;
+      DROP TABLE child_locations;
+      ALTER TABLE child_locations_new RENAME TO child_locations;
+    `,
+  },
 ];
 
 /**
