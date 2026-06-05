@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const dir = '/home/tankiso/Projects/Digital-Parent-V4/server/routes';
+const dir = __dirname;
 
 function fixFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');

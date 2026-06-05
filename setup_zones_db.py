@@ -35,7 +35,9 @@ def update_schema():
 
     # Update db.js
     try:
-        with open('/home/tankiso/Music/Digital-Parent-V4/server/db.js', 'r') as f:
+        import os
+        db_js_path = os.path.join(os.path.dirname(__file__), 'server', 'db.js')
+        with open(db_js_path, 'r') as f:
             content = f.read()
 
         table_sql = """
@@ -58,7 +60,7 @@ def update_schema():
                 "location_type TEXT NOT NULL,",
                 "location_type TEXT NOT NULL,\n        lat REAL DEFAULT 0.0,\n        lng REAL DEFAULT 0.0,"
             )
-            with open('/home/tankiso/Music/Digital-Parent-V4/server/db.js', 'w') as f:
+            with open(db_js_path, 'w') as f:
                 f.write(content)
             print("Updated db.js successfully.")
     except Exception as e:

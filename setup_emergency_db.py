@@ -25,7 +25,9 @@ def update_schema():
 
     # 2. Update db.js for future migrations
     try:
-        with open('/home/tankiso/Music/Digital-Parent-V4/server/db.js', 'r') as f:
+        import os
+        db_js_path = os.path.join(os.path.dirname(__file__), 'server', 'db.js')
+        with open(db_js_path, 'r') as f:
             content = f.read()
 
         table_sql = """
@@ -43,7 +45,7 @@ def update_schema():
                 "CREATE TABLE IF NOT EXISTS child_app_usage",
                 table_sql + "\n      CREATE TABLE IF NOT EXISTS child_app_usage"
             )
-            with open('/home/tankiso/Music/Digital-Parent-V4/server/db.js', 'w') as f:
+            with open(db_js_path, 'w') as f:
                 f.write(content)
             print("Updated db.js successfully.")
     except Exception as e:
