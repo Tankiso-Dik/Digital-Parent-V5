@@ -32,6 +32,7 @@ export async function render(container, { user }) {
     }
 
     // EMERGENCY REQUESTS
+    if (isParent) {
     try {
       const emRes = await apiFetch('/reports/emergency');
       const requests = (emRes.data || []).filter(r => r.status === 'pending');
@@ -109,6 +110,7 @@ export async function render(container, { user }) {
         });
       }
     } catch(e) {}
+    } // end isParent check
 
     // --- INDIVIDUAL CHILD DASHBOARDS ---
     const grid = document.createElement('div');

@@ -65,7 +65,7 @@ export async function render(container, { user }) {
       if (z.zone_type === 'safe' || z.zone_type === 'park') color = 'green';
       if (z.zone_type === 'danger') color = 'red';
       
-      const circle = L.circle([z.lat, z.lng], { color, radius: 250, fillOpacity: 0.2 })
+      const circle = L.circle([z.lat, z.lng], { color, radius: z.radius || 250, fillOpacity: 0.2 })
         .addTo(map)
         .bindPopup(`<b>${z.name}</b><br>${z.zone_type.toUpperCase()}`);
       zoneMarkers.push(circle);
@@ -105,13 +105,49 @@ export async function render(container, { user }) {
         item.className = 'glass';
         item.style.cssText = 'padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;';
         item.innerHTML = `
-          <span><b>${z.name}</b> (${z.zone_type})</span>
+          <div style="flex:1;">
+            <b>${z.name}</b> (${z.zone_type})
+            <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Radius: ${z.radius || 250}m</div>
+          </div>
         `;
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex; gap:4px;';
+        
         const gotoBtn = document.createElement('button');
         gotoBtn.className = 'btn btn--ghost btn--sm';
         gotoBtn.innerHTML = '🎯';
         gotoBtn.onclick = () => map.setView([z.lat, z.lng], 17);
-        item.appendChild(gotoBtn);
+        actions.appendChild(gotoBtn);
+        
+        const resizeBtn = document.createElement('button');
+        resizeBtn.className = 'btn btn--ghost btn--sm';
+        resizeBtn.innerHTML = '📏';
+        resizeBtn.onclick = async () => {
+          const r = prompt("Enter new radius in meters (e.g. 100, 500):", z.radius || 250);
+          if(r && !isNaN(r)){
+            try {
+              await apiFetch('/location/zones/'+z.id, {method:'PATCH', body:JSON.stringify({radius: parseInt(r)})});
+              loadZones();
+            }catch(e){ showToast('Error resizing', 'error'); }
+          }
+        };
+        actions.appendChild(resizeBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn btn--ghost btn--sm';
+        delBtn.innerHTML = '🗑️';
+        delBtn.style.color = 'var(--color-danger)';
+        delBtn.onclick = async () => {
+          if(confirm('Delete zone ' + z.name + '?')) {
+            try {
+              await apiFetch('/location/zones/'+z.id, {method:'DELETE'});
+              loadZones();
+            }catch(e){ showToast('Error deleting', 'error'); }
+          }
+        };
+        actions.appendChild(delBtn);
+        
+        item.appendChild(actions);
         zonesList.appendChild(item);
       });
     } else {
@@ -288,7 +324,7 @@ export async function render(container, { user }) {
       try {
         await apiFetch('/location/zones', {
           method: 'POST',
-          body: JSON.stringify({ name, lat: e.latlng.lat, lng: e.latlng.lng, zone_type: typeStr })
+          body: JSON.stringify({ name, lat: e.latlng.lat, lng: e.latlng.lng, zone_type: typeStr, radius: 250 })
         });
         showToast('Zone defined successfully!', 'success');
         loadZones();
@@ -313,14 +349,55 @@ export async function render(container, { user }) {
 
           const item = document.createElement('div');
           item.className = `child-status-item glass ${isDanger ? 'child-status-item--danger' : ''}`;
-          item.style.cssText = 'padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--color-border-subtle);';
+          item.style.cssText = 'padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--color-border-subtle); cursor: pointer; transition: all 0.2s;';
           item.innerHTML = `
             <div style="display:flex; justify-content: space-between;">
               <b style="${isDanger ? 'color: var(--color-danger);' : ''}">${loc.display_name}</b>
               <small class="text-secondary">${new Date(loc.updated_at).toLocaleTimeString()}</small>
             </div>
             <div class="text-secondary" style="font-size: 12px; margin-top: 4px;">Zone: ${displayType}</div>
+            <div style="font-size:11px; margin-top:4px; color:var(--color-primary);">Click to view location history</div>
           `;
+          item.onmouseenter = () => item.style.transform = 'scale(1.02)';
+          item.onmouseleave = () => item.style.transform = 'scale(1)';
+          item.onclick = async () => {
+            try {
+              const histRes = await apiFetch('/location/history/' + loc.user_id);
+              const history = histRes.data || [];
+              if (history.length === 0) {
+                showToast('No history found for ' + loc.display_name, 'info');
+                return;
+              }
+              // Clear previous history layer if exists
+              if (window.childHistoryLayer) {
+                map.removeLayer(window.childHistoryLayer);
+              }
+              const group = L.featureGroup().addTo(map);
+              
+              const latlngs = [];
+              history.forEach((h, idx) => {
+                const ll = [h.lat, h.lng];
+                latlngs.push(ll);
+                const isLatest = idx === 0;
+                L.circleMarker(ll, {
+                  color: isLatest ? 'var(--color-primary)' : 'var(--color-secondary)',
+                  radius: isLatest ? 8 : 4,
+                  fillOpacity: isLatest ? 1 : 0.5
+                }).bindPopup(`<b>${loc.display_name}</b><br>${new Date(h.timestamp).toLocaleString()}<br>Zone: ${h.zone_name || 'Unknown'}`)
+                  .addTo(group);
+              });
+              
+              if (latlngs.length > 1) {
+                L.polyline(latlngs, {color: 'var(--color-primary)', dashArray: '5, 5', opacity: 0.5}).addTo(group);
+              }
+              
+              map.fitBounds(group.getBounds(), { padding: [50, 50] });
+              window.childHistoryLayer = group;
+              showToast('Showing recent locations for ' + loc.display_name, 'success');
+            } catch (e) {
+              showToast('Failed to load history', 'error');
+            }
+          };
           statusListEl.appendChild(item);
         });
       }

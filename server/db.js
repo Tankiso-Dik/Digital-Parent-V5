@@ -1804,6 +1804,22 @@ const MIGRATIONS = [
       ALTER TABLE family_zones_new RENAME TO family_zones;
     `,
   },
+  {
+    version: 47,
+    description: 'Add radius to family_zones and child_location_history table',
+    up: `
+      ALTER TABLE family_zones ADD COLUMN radius INTEGER DEFAULT 250;
+      CREATE TABLE IF NOT EXISTS child_location_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        lat REAL NOT NULL,
+        lng REAL NOT NULL,
+        zone_name TEXT,
+        timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_child_loc_history_user ON child_location_history(user_id);
+    `,
+  },
 ];
 
 /**

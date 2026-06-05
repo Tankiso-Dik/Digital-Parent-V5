@@ -45,6 +45,11 @@ router.post('/', (req, res) => {
         zone_name = excluded.zone_name,
         updated_at = excluded.updated_at
     `).run(req.authUserId, location_type, lat || 0, lng || 0, zone_name || null);
+
+    db.get().prepare(`
+      INSERT INTO child_location_history (user_id, lat, lng, zone_name)
+      VALUES (?, ?, ?, ?)
+    `).run(req.authUserId, lat || 0, lng || 0, zone_name || null);
     
     res.json({ ok: true });
   } catch (err) {
@@ -78,4 +83,39 @@ router.post('/zones', (req, res) => {
   }
 });
 
+
+router.get('/history/:id', (req, res) => {
+  try {
+    const history = db.get().prepare(`
+      SELECT lat, lng, zone_name, timestamp 
+      FROM child_location_history 
+      WHERE user_id = ? 
+      ORDER BY timestamp DESC LIMIT 20
+    `).all(req.params.id);
+    res.json({ data: history });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.delete('/zones/:id', (req, res) => {
+  try {
+    db.get().prepare('DELETE FROM family_zones WHERE id = ?').run(req.params.id);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.patch('/zones/:id', (req, res) => {
+  try {
+    const { radius } = req.body;
+    db.get().prepare('UPDATE family_zones SET radius = ? WHERE id = ?').run(radius, req.params.id);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 export default router;
+
