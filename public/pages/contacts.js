@@ -14,8 +14,7 @@ import { esc } from '/utils/html.js';
 // Konstanten
 // --------------------------------------------------------
 
-const CATEGORIES = ['Arzt', 'Schule/Kita', 'Behörde', 'Versicherung',
-                    'Handwerker', 'Notfall', 'Sonstiges'];
+const CATEGORIES = ['Arzt', 'Schule/Kita', 'Notfall', 'Sonstiges'];
 
 const CATEGORY_ICONS = {
   'Arzt':         '🏥',
@@ -315,7 +314,7 @@ function openContactModal({ mode, contact = null }) {
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-phone">${t('contacts.phoneLabel')}</label>
-      <input type="tel" class="form-input" id="cm-phone" placeholder="${t('contacts.phonePlaceholder')}" value="${v('phone')}" autocomplete="tel">
+      <input type="tel" class="form-input" id="cm-phone" placeholder="+27 …" value="${v('phone')}" autocomplete="tel">
     </div>
     <div class="form-group">
       <label class="form-label" for="cm-email">${t('contacts.emailLabel')}</label>

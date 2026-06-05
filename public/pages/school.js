@@ -1,6 +1,7 @@
 import { apiFetch } from '../api.js';
 
 export async function render(container, { user }) {
+  const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
   const wrapper = document.createElement('div');
   wrapper.className = 'school-page';
   wrapper.style.cssText = 'max-width: 900px; margin: 0 auto; padding-bottom: 40px;';
@@ -19,7 +20,10 @@ export async function render(container, { user }) {
 
   try {
     const usersRes = await apiFetch('/auth/users');
-    const children = (usersRes.data || []).filter(u => u.family_role === 'child');
+    let children = (usersRes.data || []).filter(u => u.family_role === 'child');
+    if (!isParent) {
+      children = children.filter(u => u.id === user.id);
+    }
 
     if (!children.length) {
       contentWrap.innerHTML = `<div class="empty-state"><p>No children accounts found in your family.</p></div>`;
@@ -83,6 +87,7 @@ export async function render(container, { user }) {
         const data = res.data;
         
         const buildAwardBtn = (milestoneId, amount) => {
+          if (!isParent) return '';
           if (localStorage.getItem(`award_${childId}_${milestoneId}`) === 'awarded') {
             return `<span style="background: rgba(52, 199, 89, 0.1); color: #34C759; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #34C759;">Awarded</span>`;
           }

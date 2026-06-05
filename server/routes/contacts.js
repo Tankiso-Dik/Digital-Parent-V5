@@ -13,8 +13,7 @@ const log = createLogger('Contacts');
 
 const router  = express.Router();
 
-const VALID_CATEGORIES = ['Arzt', 'Schule/Kita', 'Behörde', 'Versicherung',
-                           'Handwerker', 'Notfall', 'Sonstiges'];
+const VALID_CATEGORIES = ['Arzt', 'Schule/Kita', 'Notfall', 'Sonstiges'];
 
 /**
  * Loads multi-value fields (phones, emails, addresses) for a contact.
