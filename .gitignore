@@ -1,4 +1,5 @@
 # Database
+data/
 data/oikos.db
 data/oikos.db-wal
 data/oikos.db-shm
@@ -9,3 +10,13 @@ node_modules/
 
 # MacOS
 .DS_Store
+
+# Oikos / Environment specific
+coverage/
+.claude/
+*.txt
+.worktrees/
+docs/superpowers/
+.superpowers/
+.interface-design/
+public/robots.txt
