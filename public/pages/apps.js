@@ -147,8 +147,13 @@ export async function render(container, { user }) {
 
   const apps = [
     { type: 'games', label: 'Roblox', desc: 'Play games with friends', icon: 'gamepad-2', color: '#FF4B2B', bg: 'rgba(255, 75, 43, 0.1)' },
+    { type: 'games', label: 'Minecraft', desc: 'Build worlds', icon: 'box', color: '#2ecc71', bg: 'rgba(46, 204, 113, 0.1)' },
     { type: 'social', label: 'TikTok', desc: 'Watch videos', icon: 'smartphone', color: '#1DA1F2', bg: 'rgba(29, 161, 242, 0.1)' },
-    { type: 'school', label: 'Khan Academy', desc: 'Learn anything', icon: 'graduation-cap', color: '#00B4DB', bg: 'rgba(0, 180, 219, 0.1)' }
+    { type: 'social', label: 'Instagram', desc: 'Share photos', icon: 'camera', color: '#E1306C', bg: 'rgba(225, 48, 108, 0.1)' },
+    { type: 'social', label: 'Facebook', desc: 'Connect with friends', icon: 'facebook', color: '#1877F2', bg: 'rgba(24, 119, 242, 0.1)' },
+    { type: 'social', label: 'YouTube', desc: 'Watch videos', icon: 'youtube', color: '#FF0000', bg: 'rgba(255, 0, 0, 0.1)' },
+    { type: 'school', label: 'Khan Academy', desc: 'Learn anything', icon: 'graduation-cap', color: '#00B4DB', bg: 'rgba(0, 180, 219, 0.1)' },
+    { type: 'school', label: 'Duolingo', desc: 'Learn languages', icon: 'bird', color: '#78C800', bg: 'rgba(120, 200, 0, 0.1)' }
   ];
 
   apps.forEach(app => {
@@ -228,42 +233,65 @@ export async function render(container, { user }) {
         };
         actions.appendChild(btn);
       } else {
-        ['15', '30', '60'].forEach(m => {
-          const cost = parseInt(m, 10);
-          const btn = document.createElement('button');
-          btn.style.cssText = `
-            flex: 1; background: var(--bg-body); border: 1px solid var(--color-border); color: var(--text-main);
-            padding: 8px 0; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 12px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-          `;
-          const timeLabel = m === '60' ? '1h' : `${m}m`;
-          btn.innerHTML = `<span>Unlock ${timeLabel}</span><span style="font-size: 10px; opacity: 0.8; font-weight: normal;"><i data-lucide="star" style="width: 10px; height: 10px;"></i> ${cost}</span>`;
-          
-          btn.onmouseover = () => { btn.style.background = app.color; btn.style.color = 'white'; btn.style.borderColor = app.color; };
-          btn.onmouseout = () => { btn.style.background = 'var(--bg-body)'; btn.style.color = 'var(--text-main)'; btn.style.borderColor = 'var(--color-border)'; };
-          btn.onclick = async () => {
-            if (points < cost) {
-              showToast(`You need ${cost} points to unlock ${timeLabel}. Complete chores!`, 'danger');
-              return;
-            }
-            try {
-              // Atomic action: spend points AND track usage in one call
-              await apiFetch('/reports/spend', { 
-                method: 'POST', 
-                body: JSON.stringify({ 
-                  cost,
-                  app_type: app.type,
-                  minutes: parseInt(m, 10)
-                }) 
-              });
-              showToast(`Unlocked ${timeLabel} of ${app.label}!`, 'success');
-              setTimeout(() => window.oikos?.navigate('/apps'), 500);
-            } catch (err) { 
-              showToast(err.message || 'Failed to unlock app time.', 'danger'); 
-            }
-          };
-          actions.appendChild(btn);
-        });
+        const sliderWrap = document.createElement('div');
+        sliderWrap.style.cssText = 'width: 100%; display: flex; flex-direction: column; gap: 10px;';
+        
+        const sliderDiv = document.createElement('div');
+        sliderDiv.style.cssText = 'display: flex; align-items: center; gap: 8px; justify-content: space-between;';
+        
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '5';
+        slider.max = '120';
+        slider.step = '5';
+        slider.value = '30';
+        slider.style.cssText = 'flex: 1; accent-color: ' + app.color + ';';
+        
+        const labelDiv = document.createElement('div');
+        labelDiv.style.cssText = 'font-size: 14px; font-weight: 600; min-width: 45px; text-align: right; color: var(--text-main);';
+        labelDiv.textContent = '30m';
+        
+        slider.oninput = () => { labelDiv.textContent = slider.value + 'm'; costSpan.innerHTML = '<i data-lucide="star" style="width: 12px; height: 12px;"></i> ' + slider.value; if (window.lucide) window.lucide.createIcons({el: costSpan}); };
+        
+        sliderDiv.appendChild(slider);
+        sliderDiv.appendChild(labelDiv);
+        sliderWrap.appendChild(sliderDiv);
+        
+        const btn = document.createElement('button');
+        btn.style.cssText = `
+          width: 100%; background: var(--bg-body); border: 1px solid var(--color-border); color: var(--text-main);
+          padding: 10px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+        `;
+        btn.innerHTML = `<span>Unlock Time</span>`;
+        const costSpan = document.createElement('span');
+        costSpan.style.cssText = 'font-size: 12px; opacity: 0.8; font-weight: normal; margin-left: 4px; display: flex; align-items: center; gap: 2px;';
+        costSpan.innerHTML = `<i data-lucide="star" style="width: 12px; height: 12px;"></i> 30`;
+        btn.appendChild(costSpan);
+        
+        btn.onmouseover = () => { btn.style.background = app.color; btn.style.color = 'white'; btn.style.borderColor = app.color; };
+        btn.onmouseout = () => { btn.style.background = 'var(--bg-body)'; btn.style.color = 'var(--text-main)'; btn.style.borderColor = 'var(--color-border)'; };
+        btn.onclick = async () => {
+          const m = parseInt(slider.value, 10);
+          const cost = m; // 1 point = 1 minute
+          if (points < cost) {
+            showToast(`You need ${cost} points. You only have ${points}!`, 'danger');
+            return;
+          }
+          try {
+            await apiFetch('/reports/spend', { 
+              method: 'POST', 
+              body: JSON.stringify({ cost, app_type: app.type, minutes: m }) 
+            });
+            showToast(`Unlocked ${m}m of ${app.label}!`, 'success');
+            setTimeout(() => window.oikos?.navigate('/apps'), 500);
+          } catch (err) { 
+            showToast(err.message || 'Failed to unlock app time.', 'danger'); 
+          }
+        };
+        
+        sliderWrap.appendChild(btn);
+        actions.appendChild(sliderWrap);
       }
       card.appendChild(actions);
     } else {

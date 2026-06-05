@@ -112,6 +112,31 @@ async function renderParentDashboard(grid, user) {
     locCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load locations.</div>`;
   }
 
+  // 3. Children Rewards Overview
+  const rewardsCard = createCard('Children Rewards & Chores', 'star', '#FF9500');
+  grid.appendChild(rewardsCard);
+  try {
+    const usersRes = await apiFetch('/auth/users');
+    const children = (usersRes.data || []).filter(u => u.family_role === 'child');
+    if (children.length === 0) {
+      rewardsCard.innerHTML += `<div style="padding: 20px 0; color: var(--text-muted);">No child accounts found.</div>`;
+    } else {
+      for (const child of children) {
+        rewardsCard.innerHTML += `
+          <div style="padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-weight: 600; font-size: 15px;">${child.display_name}</div>
+            <div style="display: flex; gap: 16px; font-size: 13px; font-weight: bold;">
+              <span style="color: #FF9500; display:flex; align-items:center; gap:4px;"><i data-lucide="star" style="width:16px; height:16px;"></i> ${child.points || 0} pts</span>
+              <span style="color: #FF3B30; display:flex; align-items:center; gap:4px;"><i data-lucide="flame" style="width:16px; height:16px;"></i> ${child.current_streak || 0} days</span>
+            </div>
+          </div>
+        `;
+      }
+    }
+  } catch(e) {
+    rewardsCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load rewards.</div>`;
+  }
+
   // 3. Quick Links
   const linksCard = createCard('Quick Actions', 'zap', 'var(--color-accent)');
   grid.appendChild(linksCard);
@@ -148,7 +173,24 @@ async function renderChildDashboard(grid, user) {
           <i data-lucide="flame" style="width: 18px; height: 18px;"></i> ${streak} Day Streak!
         </div>` : ''}
       </div>
-      <button class="btn" id="spend-points-btn" style="width: 100%; background: #FF9500; color: white; border: none; margin-top: 10px;">
+      <div style="margin: 15px 0; padding: 15px; background: rgba(255, 149, 0, 0.05); border-radius: 12px; border: 1px dashed rgba(255, 149, 0, 0.3);">
+        <div style="font-size: 12px; color: var(--text-secondary); font-weight: bold; margin-bottom: 12px; text-transform: uppercase;">🎯 Next Milestones</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i data-lucide="gamepad-2" style="width:14px; height:14px; vertical-align:-2px; color:#FF4B2B; margin-right:4px;"></i> 30m Gaming</span>
+            <b style="color: var(--text-main);">30 pts</b>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i data-lucide="smartphone" style="width:14px; height:14px; vertical-align:-2px; color:#1DA1F2; margin-right:4px;"></i> 1h Social Media</span>
+            <b style="color: var(--text-main);">60 pts</b>
+          </div>
+          <div style="height: 6px; background: var(--bg-body); border-radius: 3px; overflow: hidden; margin-top: 6px;">
+            <div style="height: 100%; width: ${Math.min(100, (points/60)*100)}%; background: linear-gradient(90deg, #FFD700, #FF9500); border-radius: 3px;"></div>
+          </div>
+          <div style="text-align: right; font-size: 11px; color: var(--text-muted); font-weight: 500;">${points} / 60 pts</div>
+        </div>
+      </div>
+      <button class="btn" id="spend-points-btn" style="width: 100%; background: #FF9500; color: white; border: none; margin-top: 10px; box-shadow: 0 4px 15px rgba(255,149,0,0.3);">
         Spend Points on Apps
       </button>
     `;
