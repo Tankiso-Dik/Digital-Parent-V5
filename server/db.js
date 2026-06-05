@@ -16,7 +16,7 @@ import { createLogger } from './logger.js';
 
 const log = createLogger('DB');
 
-const DB_PATH = process.env.DB_PATH || path.join(import.meta.dirname, '..', 'oikos.db');
+const DB_PATH = process.env.DB_PATH || path.join(import.meta.dirname, '..', 'data', 'oikos.db');
 const DB_KEY = process.env.DB_ENCRYPTION_KEY;
 
 let db;

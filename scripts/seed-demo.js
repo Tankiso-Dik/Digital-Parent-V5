@@ -23,7 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
 const dbIdx = args.indexOf('--db');
-const DB_PATH = dbIdx !== -1 ? args[dbIdx + 1] : resolve(__dirname, '..', 'data', 'oikos.db');
+const DB_PATH = dbIdx !== -1 ? args[dbIdx + 1] : (process.env.DB_PATH || resolve(__dirname, '..', 'data', 'oikos.db'));
 
 const db = new Database(DB_PATH);
 db.pragma('foreign_keys = ON');

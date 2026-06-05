@@ -1,0 +1,11 @@
+# Database
+data/oikos.db
+data/oikos.db-wal
+data/oikos.db-shm
+
+# Node
+node_modules/
+.env
+
+# MacOS
+.DS_Store
