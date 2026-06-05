@@ -1275,9 +1275,7 @@ function navItems() {
   baseItems.push({ path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  });
   baseItems.push({ path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' });
   
-  if (isParent) {
-    baseItems.push({ path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    });
-  }
+  baseItems.push({ path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    });
   
   baseItems.push({ path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  });
 
