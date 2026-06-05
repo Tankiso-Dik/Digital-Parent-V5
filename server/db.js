@@ -1830,6 +1830,19 @@ const MIGRATIONS = [
       ALTER TABLE child_locations ADD COLUMN zone_name TEXT;
     `,
   },
+  {
+    version: 49,
+    description: 'Add event_completions table for recurring chore status',
+    up: `
+      CREATE TABLE IF NOT EXISTS event_completions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id INTEGER NOT NULL REFERENCES calendar_events(id) ON DELETE CASCADE,
+        completion_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'done',
+        UNIQUE(event_id, completion_date)
+      );
+    `,
+  },
 ];
 
 /**
