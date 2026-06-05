@@ -1820,6 +1820,16 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_child_loc_history_user ON child_location_history(user_id);
     `,
   },
+  {
+    version: 48,
+    description: 'Add missing columns for points, streak, calendar categories, and child zones',
+    up: `
+      ALTER TABLE users ADD COLUMN points INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN current_streak INTEGER DEFAULT 0;
+      ALTER TABLE calendar_events ADD COLUMN category TEXT DEFAULT 'other';
+      ALTER TABLE child_locations ADD COLUMN zone_name TEXT;
+    `,
+  },
 ];
 
 /**
