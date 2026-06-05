@@ -67,7 +67,9 @@ export async function render(container, { user }) {
     const dataContainer = document.createElement('div');
     contentWrap.appendChild(dataContainer);
 
+    let currentFetchId = 0;
     const loadChildData = async (childId) => {
+      const fetchId = ++currentFetchId;
       dataContainer.innerHTML = `
         <div style="display: grid; gap: 24px;">
           <div class="skeleton" style="height: 150px; border-radius: 20px;"></div>
@@ -77,6 +79,7 @@ export async function render(container, { user }) {
       
       try {
         const res = await apiFetch(`/school/summary/${childId}`);
+        if (fetchId !== currentFetchId) return;
         const data = res.data;
         
         const buildAwardBtn = (milestoneId, amount) => {
@@ -87,14 +90,15 @@ export async function render(container, { user }) {
         };
 
         let html = '<div style="display: flex; flex-direction: column; gap: 32px;">';
+        const thresholds = data.thresholds || { attendanceStreak: 5, subjectPass: 70, termAveragePass: 75 };
         
         // 1. Attendance
-        const att = data.attendance;
-        
-        let streakBtnHtml = '';
-        if (att.streak >= (data.thresholds || { attendanceStreak: 5, subjectPass: 70, termAveragePass: 75 }).attendanceStreak) {
-          streakBtnHtml = buildAwardBtn('streak', 50);
-        }
+        if (data.attendance) {
+          const att = data.attendance;
+          let streakBtnHtml = '';
+          if (att.streak >= thresholds.attendanceStreak) {
+            streakBtnHtml = buildAwardBtn('streak', 50);
+          }
 
         const heatDays = [];
         for (let i = 0; i < 14; i++) {
@@ -128,8 +132,11 @@ export async function render(container, { user }) {
           </section>
         `;
 
+        } else { html += '<section><h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="calendar-check" style="color: #00B4DB;"></i> Attendance</h3><div class="empty-state">No attendance data available.</div></section>'; }
+
         // 2. Timetable
-        html += `
+        if (data.timetable && data.timetable.length > 0) {
+          html += `
           <section>
             <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="clock" style="color: #00B4DB;"></i> Timetable</h3>
             <div style="background: var(--bg-card); border-radius: 20px; border: 1px solid var(--color-border-subtle); overflow: hidden;">
@@ -141,7 +148,7 @@ export async function render(container, { user }) {
                   ${day.periods.map((p, idx) => `
                     <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: ${idx < day.periods.length - 1 ? '1px solid var(--color-border-subtle)' : 'none'};">
                       <div style="width: 40px; font-weight: bold; color: var(--text-muted);">P${idx+1}</div>
-                      <div style="flex: 1;">
+                      <div style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                         <div style="font-weight: 600; font-size: 15px;">${p.subject}</div>
                         <div style="font-size: 13px; color: var(--text-secondary);">${p.teacher}</div>
                       </div>
@@ -156,13 +163,15 @@ export async function render(container, { user }) {
           </section>
         `;
 
-        // 3. Performance
-        let termBtnHtml = '';
-        if (data.academic.average >= (data.thresholds || { attendanceStreak: 5, subjectPass: 70, termAveragePass: 75 }).termAveragePass) {
-          termBtnHtml = buildAwardBtn('term_avg', 100);
-        }
+        } else { html += '<section><h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="clock" style="color: #00B4DB;"></i> Timetable</h3><div class="empty-state">No timetable available.</div></section>'; }
 
-        html += `
+        // 3. Performance
+        if (data.academic && data.academic.subjects) {
+          let termBtnHtml = '';
+          if (data.academic.average >= thresholds.termAveragePass) {
+            termBtnHtml = buildAwardBtn('term_avg', 100);
+          }
+          html += `
           <section>
             <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="award" style="color: #00B4DB;"></i> Academic Performance</h3>
             <div style="background: var(--bg-card); padding: 24px; border-radius: 20px; border: 1px solid var(--color-border-subtle);">
@@ -174,7 +183,7 @@ export async function render(container, { user }) {
               <div style="display: grid; gap: 16px;">
                 ${data.academic.subjects.map(sub => {
                   let subBtnHtml = '';
-                  if (sub.score >= (data.thresholds || { attendanceStreak: 5, subjectPass: 70, termAveragePass: 75 }).subjectPass) {
+                  if (sub.score >= thresholds.subjectPass) {
                     subBtnHtml = buildAwardBtn(`subject_${sub.name.replace(/\s+/g, '_')}`, 30);
                   }
                   return `
@@ -193,18 +202,21 @@ export async function render(container, { user }) {
           </section>
         `;
 
+        } else { html += '<section><h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="award" style="color: #00B4DB;"></i> Academic Performance</h3><div class="empty-state">No academic data available.</div></section>'; }
+
         // 4. Contacts
-        html += `
+        if (data.contacts && data.contacts.length > 0) {
+          html += `
           <section>
             <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="users" style="color: #00B4DB;"></i> School Contacts</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
               ${data.contacts.map(c => `
                 <div style="background: var(--bg-card); padding: 16px; border-radius: 16px; border: 1px solid var(--color-border-subtle); display: flex; align-items: center; justify-content: space-between;">
                   <div>
-                    <div style="font-weight: bold; font-size: 15px; margin-bottom: 2px;">${c.name}</div>
+                    <div style="font-weight: bold; font-size: 15px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${c.name}</div>
                     <div style="font-size: 13px; color: var(--text-secondary);">${c.role}</div>
                   </div>
-                  <a href="tel:${c.phone.replace(/\\s/g,'')}" class="btn btn--icon btn--secondary" style="border-radius: 50%; width: 40px; height: 40px; padding: 0;">
+                  <a href="tel:${(c.phone || '').replace(/\s+/g,'')}" class="btn btn--icon btn--secondary" style="border-radius: 50%; width: 40px; height: 40px; padding: 0;">
                     <i data-lucide="phone" style="width: 18px; height: 18px;"></i>
                   </a>
                 </div>
@@ -212,6 +224,8 @@ export async function render(container, { user }) {
             </div>
           </section>
         `;
+
+        } else { html += '<section><h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;"><i data-lucide="users" style="color: #00B4DB;"></i> School Contacts</h3><div class="empty-state">No school contacts available.</div></section>'; }
 
         html += '</div>';
         dataContainer.innerHTML = html;

@@ -146,9 +146,9 @@ export async function render(container, { user }) {
   grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;';
 
   const apps = [
-    { type: 'social', label: 'Social Media', desc: 'Chat and share', icon: 'message-circle', color: '#1DA1F2', bg: 'rgba(29, 161, 242, 0.1)' },
-    { type: 'games', label: 'Games', desc: 'Fun and play', icon: 'gamepad-2', color: '#FF4B2B', bg: 'rgba(255, 75, 43, 0.1)' },
-    { type: 'school', label: 'School Apps', desc: 'Learning & homework', icon: 'graduation-cap', color: '#00B4DB', bg: 'rgba(0, 180, 219, 0.1)' }
+    { type: 'games', label: 'Roblox', desc: 'Play games with friends', icon: 'gamepad-2', color: '#FF4B2B', bg: 'rgba(255, 75, 43, 0.1)' },
+    { type: 'social', label: 'TikTok', desc: 'Watch videos', icon: 'smartphone', color: '#1DA1F2', bg: 'rgba(29, 161, 242, 0.1)' },
+    { type: 'school', label: 'Khan Academy', desc: 'Learn anything', icon: 'graduation-cap', color: '#00B4DB', bg: 'rgba(0, 180, 219, 0.1)' }
   ];
 
   apps.forEach(app => {
@@ -216,13 +216,13 @@ export async function render(container, { user }) {
           width: 100%; background: var(--bg-body); border: 1px solid var(--color-border); color: var(--text-main);
           padding: 10px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;
         `;
-        btn.innerHTML = `<span><i data-lucide="play" style="width:14px; height:14px; margin-right:4px;"></i> Open School Apps</span>`;
+        btn.innerHTML = `<span><i data-lucide="play" style="width:14px; height:14px; margin-right:4px;"></i> Open Khan Academy</span>`;
         btn.onmouseover = () => { btn.style.background = app.color; btn.style.color = 'white'; btn.style.borderColor = app.color; };
         btn.onmouseout = () => { btn.style.background = 'var(--bg-body)'; btn.style.color = 'var(--text-main)'; btn.style.borderColor = 'var(--color-border)'; };
         btn.onclick = async () => {
           try {
             await apiFetch('/reports/apps', { method: 'POST', body: JSON.stringify({ app_type: app.type, minutes: 30 }) });
-            showToast(`Opened School Apps (Tracking time...)`, 'success');
+            showToast(`Opened Khan Academy (Tracking time...)`, 'success');
             setTimeout(() => window.oikos?.navigate('/apps'), 500);
           } catch (err) { showToast('Failed to track app time', 'danger'); }
         };

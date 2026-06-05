@@ -21,7 +21,10 @@ export async function render(container, { user }) {
 
   try {
     const usersRes = await apiFetch('/auth/users');
-    const children = (usersRes.data || []).filter(u => u.family_role === 'child');
+    let children = (usersRes.data || []).filter(u => u.family_role === 'child');
+    if (!isParent) {
+      children = children.filter(u => u.id === user.id);
+    }
 
     if (!children.length) {
       contentWrap.innerHTML = `<div class="empty-state"><p>No children accounts found in your family.</p></div>`;
@@ -230,15 +233,23 @@ export async function render(container, { user }) {
                   <div style="display: flex; flex-direction: column; gap: 12px;">
                     ${appStats.map(app => {
                       const appPercent = Math.round((app.total_minutes / (totalAppMinutes || 1)) * 100);
-                      let color = app.app_type === 'school' ? '#00B4DB' : (app.app_type === 'games' ? '#FF4B2B' : '#1DA1F2');
+                      let appInfo = { name: app.app_type, icon: 'box', color: '#888' };
+                      if (app.app_type === 'school') appInfo = { name: 'Khan Academy', icon: 'graduation-cap', color: '#00B4DB' };
+                      if (app.app_type === 'games') appInfo = { name: 'Roblox', icon: 'gamepad-2', color: '#FF4B2B' };
+                      if (app.app_type === 'social') appInfo = { name: 'TikTok', icon: 'smartphone', color: '#1DA1F2' };
+                      if (app.app_type === 'emergency') appInfo = { name: 'SOS Active', icon: 'siren', color: '#FF3B30' };
+
                       return `
                         <div>
-                          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
-                            <span style="text-transform: capitalize; font-weight: 600;">${app.app_type}</span>
+                          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 4px;">
+                            <span style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                              <i data-lucide="${appInfo.icon}" style="width: 14px; height: 14px; color: ${appInfo.color};"></i>
+                              ${appInfo.name}
+                            </span>
                             <span style="color: var(--text-secondary);">${app.total_minutes} min (${appPercent}%)</span>
                           </div>
                           <div style="height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden;">
-                            <div style="height: 100%; width: ${appPercent}%; background: ${color};"></div>
+                            <div style="height: 100%; width: ${appPercent}%; background: ${appInfo.color};"></div>
                           </div>
                         </div>
                       `;
