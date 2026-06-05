@@ -98,131 +98,43 @@ export async function render(container, { user }) {
         const gotoBtn = document.createElement('button');
         gotoBtn.className = 'btn btn--ghost btn--sm';
         gotoBtn.innerHTML = '🎯';
-        gotoBtn.onclick = () => map.setView([z.lat, z.lng], 16);
+        gotoBtn.onclick = () => map.setView([z.lat, z.lng], 17);
         item.appendChild(gotoBtn);
         zonesList.appendChild(item);
       });
     } else {
       sidebar.innerHTML = `
-        <h3>📍 Where are you?</h3>
-        <p class="text-secondary" style="font-size: var(--text-sm); margin-bottom: 15px;">Locate yourself, then confirm your check-in.</p>
-        <button id="locate-btn" class="btn btn--secondary" style="width: 100%; padding: 15px; font-size: 16px; margin-bottom: 15px;">
-          <i data-lucide="crosshair"></i> 1. Find My Location
-        </button>
-        
-        <div id="check-in-preview" style="display: none; background: var(--bg-body); padding: 15px; border-radius: 12px; border: 1px solid var(--color-border-subtle); margin-bottom: 15px;">
-           <div id="preview-status" style="font-size: 13px; font-weight: 600; margin-bottom: 15px; color: var(--text-main); text-align: center;"></div>
-           <button id="confirm-btn" class="btn btn--primary" style="width: 100%; padding: 12px; font-size: 15px;">
-             <i data-lucide="send"></i> 2. Send to Parents
-           </button>
+        <div style="text-align: center; padding: 20px;">
+          <h3 style="margin-bottom: 10px;">🛡️ Safety Center</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;">Your location is shared with your parents for safety.</p>
+          
+          <button id="sos-btn" class="btn" style="width: 100%; padding: 24px; background: #FF3B30; color: white; border: none; border-radius: 16px; font-weight: 900; font-size: 18px; box-shadow: 0 8px 20px rgba(255,59,48,0.3); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+            <i data-lucide="megaphone" style="width: 32px; height: 32px;"></i>
+            SEND SOS SIGNAL
+          </button>
+          
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 16px;">Only use in case of actual emergency.</p>
         </div>
-        
-        <div id="check-in-status" style="font-size: 13px; color: var(--text-secondary); font-weight: 500; text-align: center;"></div>
       `;
-      
-      if (window.lucide) window.lucide.createIcons({ el: sidebar });
 
-      const locateBtn = sidebar.querySelector('#locate-btn');
-      const confirmBtn = sidebar.querySelector('#confirm-btn');
-      const previewDiv = sidebar.querySelector('#check-in-preview');
-      const previewStatus = sidebar.querySelector('#preview-status');
-      const status = sidebar.querySelector('#check-in-status');
-
-      let pendingLocation = null;
-
-      locateBtn.onclick = () => {
-        locateBtn.disabled = true;
-        locateBtn.innerHTML = '<span class="spinner" style="margin-right: 8px;"></span> Locating...';
-        status.textContent = '';
-        previewDiv.style.display = 'none';
-        
-        if (!navigator.geolocation) {
-          status.textContent = 'Geolocation is not supported by your browser.';
-          locateBtn.disabled = false;
-          locateBtn.innerHTML = '<i data-lucide="crosshair"></i> 1. Find My Location';
-          if (window.lucide) window.lucide.createIcons({ el: locateBtn });
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition((pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          
-          let locationType = 'unknown';
-          let closestZone = null;
-          let minDistance = Infinity;
-
-          familyZones.forEach(z => {
-            const distance = map.distance([lat, lng], [z.lat, z.lng]);
-            if (distance < 250 && distance < minDistance) {
-              minDistance = distance;
-              closestZone = z;
-            }
-          });
-
-          if (closestZone) {
-            locationType = closestZone.zone_type;
-          }
-
-          previewDiv.style.display = 'block';
-          previewStatus.textContent = `📍 Found near: ${closestZone ? closestZone.name : 'Unknown/Transit'}`;
-
-          pendingLocation = { 
-            lat, 
-            lng, 
-            location_type: locationType,
-            zone_name: closestZone ? closestZone.name : null 
-          };
-          
-          map.setView([lat, lng], 15);
-          if (childMarkers.has('preview')) {
-            childMarkers.get('preview').remove();
-          }
-          const m = L.marker([lat, lng], { opacity: 0.7 }).addTo(map).bindPopup(`You are here: ${closestZone ? closestZone.name : 'Transit'} (Unsent)`);
-          m.openPopup();
-          childMarkers.set('preview', m);
-          
-          locateBtn.disabled = false;
-          locateBtn.innerHTML = '<i data-lucide="crosshair"></i> 1. Find My Location';
-          if (window.lucide) window.lucide.createIcons({ el: locateBtn });
-          
-          previewDiv.style.display = 'block';
-        }, (err) => {
-          console.error(err);
-          status.textContent = '❌ Could not get location. Please allow permissions or try again.';
-          locateBtn.disabled = false;
-          locateBtn.innerHTML = '<i data-lucide="crosshair"></i> 1. Find My Location';
-          if (window.lucide) window.lucide.createIcons({ el: locateBtn });
-        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-      };
-
-      confirmBtn.onclick = async () => {
-        if (!pendingLocation) return;
-        confirmBtn.disabled = true;
-        confirmBtn.innerHTML = '<span class="spinner" style="margin-right: 8px;"></span> Sending...';
-        
+      const sosBtn = sidebar.querySelector('#sos-btn');
+      sosBtn.onclick = async () => {
+        if (!confirm('Are you sure you want to send a CRITICAL SOS signal to your parents?')) return;
         try {
-          await apiFetch('/location', {
-            method: 'POST',
-            body: JSON.stringify(pendingLocation)
+          await apiFetch('/reports/emergency', { 
+            method: 'POST', 
+            body: JSON.stringify({ 
+              app_type: 'emergency', 
+              reason: 'Child triggered manual SOS signal from location map.',
+              request_type: 'sos'
+            }) 
           });
-          showToast('Location checked in successfully!', 'success');
-          
-          if (childMarkers.has('preview')) {
-            childMarkers.get('preview').remove();
-            childMarkers.delete('preview');
-          }
-          
-          previewDiv.style.display = 'none';
-          status.textContent = '✅ Location sent to parents.';
-          refreshLocations();
-        } catch(e) {
-          showToast('Failed to send location', 'error');
-          status.textContent = '❌ Error sending location.';
-        } finally {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = '<i data-lucide="send"></i> 2. Send to Parents';
-          if (window.lucide) window.lucide.createIcons({ el: confirmBtn });
+          showToast('SOS SIGNAL SENT!', 'success');
+          sosBtn.style.animation = 'pulse-red 1s infinite';
+          sosBtn.innerHTML = '<i data-lucide="alert-triangle"></i> SOS ACTIVE';
+          if (window.lucide) window.lucide.createIcons({ el: sosBtn });
+        } catch (err) {
+          showToast('Failed to send SOS', 'danger');
         }
       };
     }

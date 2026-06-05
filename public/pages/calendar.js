@@ -160,6 +160,7 @@ export async function render(container, { user }) {
         flex: 1; background: var(--bg-card); border-radius: 16px; padding: 16px;
         border: 1px solid var(--color-border-subtle); box-shadow: 0 4px 12px rgba(0,0,0,0.03);
         display: flex; justify-content: space-between; align-items: center;
+        position: relative; z-index: 2;
       `;
       
       const isToday = formatDateObj(currentDate) === formatDateObj(new Date());
@@ -175,16 +176,25 @@ export async function render(container, { user }) {
         </div>
       `;
       
-      if (!isParent && !isDone && (ev.category === 'chore' || ev.category === 'study' || ev.category === 'medication') && isToday) {
+      if (!isParent && !isDone && (ev.category === 'chore' || ev.category === 'study' || ev.category === 'medication' || ev.category === 'routine') && isToday) {
         const actBtn = document.createElement('button');
         actBtn.className = 'btn btn--success btn--sm';
+        actBtn.style.position = 'relative';
+        actBtn.style.zIndex = '10';
         actBtn.innerHTML = 'Mark Done (+10 pts)';
         actBtn.onclick = async (e) => {
+          console.log('[DEBUG] Mark Done clicked for event:', ev.id);
           e.preventDefault();
           e.stopPropagation();
           actBtn.disabled = true;
           try {
-            await apiFetch(`/calendar/${ev.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+            await apiFetch(`/calendar/${ev.id}`, { 
+              method: 'PATCH', 
+              body: JSON.stringify({ 
+                status: 'done',
+                date: formatDateObj(currentDate)
+              }) 
+            });
             showToast('Great job! You earned 10 points!', 'success');
             
             // Trigger Confetti

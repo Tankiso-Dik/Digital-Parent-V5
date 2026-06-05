@@ -80,17 +80,43 @@ router.post('/apps', (req, res) => {
 
 router.post('/spend', (req, res) => {
   try {
-    const { cost } = req.body;
-    const user = db.get().prepare('SELECT points FROM users WHERE id = ?').get(req.authUserId);
-    const currentPoints = user?.points || 0;
+    const { cost, app_type, minutes } = req.body;
     
-    if (currentPoints < cost) {
+    // Use a transaction to ensure points and usage are updated atomically
+    const performSpend = db.get().transaction(() => {
+      const user = db.get().prepare('SELECT points FROM users WHERE id = ?').get(req.authUserId);
+      const currentPoints = user?.points || 0;
+
+      if (currentPoints < cost) {
+        throw new Error('INSUFFICIENT_POINTS');
+      }
+
+      // 1. Deduct points
+      db.get().prepare('UPDATE users SET points = points - ? WHERE id = ?').run(cost, req.authUserId);
+
+      // 2. Log app usage if provided (Atomic Action)
+      if (app_type && minutes) {
+        if (!['social', 'games', 'school'].includes(app_type)) {
+          throw new Error('INVALID_APP_TYPE');
+        }
+        db.get().prepare(`
+          INSERT INTO child_app_usage (user_id, app_type, minutes)
+          VALUES (?, ?, ?)
+        `).run(req.authUserId, app_type, minutes);
+      }
+
+      return currentPoints - cost;
+    });
+
+    const newBalance = performSpend();
+    res.json({ ok: true, new_balance: newBalance });
+  } catch (err) {
+    if (err.message === 'INSUFFICIENT_POINTS') {
       return res.status(402).json({ error: 'Insufficient points to complete this action.' });
     }
-    
-    db.get().prepare('UPDATE users SET points = points - ? WHERE id = ?').run(cost, req.authUserId);
-    res.json({ ok: true, new_balance: currentPoints - cost });
-  } catch (err) {
+    if (err.message === 'INVALID_APP_TYPE') {
+      return res.status(400).json({ error: 'Invalid app type.' });
+    }
     log.error('POST /spend error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
@@ -125,11 +151,11 @@ router.get('/emergency', (req, res) => {
 
 router.post('/emergency', (req, res) => {
   try {
-    const { app_type, reason } = req.body;
+    const { app_type, reason, request_type } = req.body;
     db.get().prepare(`
-      INSERT INTO emergency_requests (user_id, app_type, reason, status)
-      VALUES (?, ?, ?, 'pending')
-    `).run(req.authUserId, app_type, reason);
+      INSERT INTO emergency_requests (user_id, app_type, reason, request_type)
+      VALUES (?, ?, ?, ?)
+    `).run(req.authUserId, app_type || 'system', reason, request_type || 'app_bypass');
     res.json({ ok: true });
   } catch (err) {
     log.error('POST /emergency error:', err);
@@ -149,6 +175,27 @@ router.patch('/emergency/:id', (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     log.error('PATCH /emergency/:id error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.post('/award', (req, res) => {
+  try {
+    const { childId, amount } = req.body;
+    if (!childId || !amount || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid parameters.' });
+    }
+    
+    const performAward = db.get().transaction(() => {
+      db.get().prepare('UPDATE users SET points = points + ? WHERE id = ?').run(amount, childId);
+      const user = db.get().prepare('SELECT points FROM users WHERE id = ?').get(childId);
+      return user?.points || 0;
+    });
+
+    const newBalance = performAward();
+    res.json({ ok: true, new_balance: newBalance });
+  } catch (err) {
+    log.error('POST /award error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

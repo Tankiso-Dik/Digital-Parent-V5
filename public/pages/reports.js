@@ -46,44 +46,66 @@ export async function render(container, { user }) {
         
         const emGrid = emContainer.querySelector('#em-grid');
         requests.forEach(req => {
+          const isSos = req.request_type === 'sos';
           const reqCard = document.createElement('div');
-          reqCard.style.cssText = 'background: var(--bg-card); border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--color-border-subtle);';
+          
+          if (isSos) {
+            reqCard.style.cssText = 'background: #FFF5F5; border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(255,0,0,0.1); border: 2px solid #FF3B30; animation: pulse-red 2s infinite;';
+          } else {
+            reqCard.style.cssText = 'background: var(--bg-card); border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--color-border-subtle);';
+          }
+
+          const label = isSos 
+            ? `<span style="color: #FF3B30; font-weight: 800; font-size: 14px; text-transform: uppercase; display: flex; align-items: center; gap: 4px;"><i data-lucide="megaphone" style="width:16px; height:16px;"></i> EMERGENCY SOS</span>` 
+            : `<span style="text-transform: uppercase; font-size: 12px; background: var(--bg-body); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border);">${req.app_type}</span>`;
+
           reqCard.innerHTML = `
             <div>
-              <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;"><span style="color: var(--color-primary);">${req.display_name}</span> wants to use <span style="text-transform: uppercase; font-size: 12px; background: var(--bg-body); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--color-border);">${req.app_type}</span></div>
+              <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">
+                ${isSos ? '<span style="color: #FF3B30;">URGENT: </span>' : ''}
+                <span style="color: var(--color-primary);">${req.display_name}</span> 
+                ${isSos ? 'triggered a safety alert' : `wants to use ${label}`}
+              </div>
               <div style="color: var(--text-secondary); font-size: 13px; font-style: italic;">"${req.reason}"</div>
-              <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">${new Date(req.created_at).toLocaleString()}</div>
+              ${isSos ? '' : `<div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">Sent: ${new Date(req.created_at).toLocaleString()}</div>`}
             </div>
             <div style="display: flex; gap: 8px;">
-              <button class="btn" style="background: var(--color-success); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;" onclick="approveEmergency(${req.id})">Approve</button>
-              <button class="btn" style="background: var(--bg-body); color: var(--color-danger); border: 1px solid var(--color-danger); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;" onclick="denyEmergency(${req.id})">Deny</button>
+              <button class="btn approve-em-btn" data-id="${req.id}" style="background: ${isSos ? '#FF3B30' : 'var(--color-success)'}; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">${isSos ? 'Acknowledge' : 'Approve'}</button>
+              ${isSos ? '' : `<button class="btn deny-em-btn" data-id="${req.id}" style="background: var(--bg-body); color: var(--color-danger); border: 1px solid var(--color-danger); padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer;">Deny</button>`}
             </div>
           `;
           emGrid.appendChild(reqCard);
         });
         
         contentWrap.appendChild(emContainer);
+
+        emContainer.querySelectorAll('.approve-em-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            try {
+              await apiFetch(`/reports/emergency/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+              window.oikos?.showToast('Request Approved', 'success');
+              window.oikos?.navigate('/reports');
+            } catch (err) {
+              window.oikos?.showToast('Failed to approve request', 'error');
+            }
+          });
+        });
+
+        emContainer.querySelectorAll('.deny-em-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            try {
+              await apiFetch(`/reports/emergency/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'denied' }) });
+              window.oikos?.showToast('Request Denied', 'success');
+              window.oikos?.navigate('/reports');
+            } catch (err) {
+              window.oikos?.showToast('Failed to deny request', 'error');
+            }
+          });
+        });
       }
     } catch(e) {}
-
-    window.approveEmergency = async (id) => {
-      try {
-        await apiFetch(`/reports/emergency/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
-        window.oikos?.showToast('Request Approved', 'success');
-        window.oikos?.navigate('/reports');
-      } catch (err) {
-        window.oikos?.showToast('Failed to approve request', 'error');
-      }
-    };
-    window.denyEmergency = async (id) => {
-      try {
-        await apiFetch(`/reports/emergency/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'denied' }) });
-        window.oikos?.showToast('Request Denied', 'success');
-        window.oikos?.navigate('/reports');
-      } catch (err) {
-        window.oikos?.showToast('Failed to deny request', 'error');
-      }
-    };
 
     // --- INDIVIDUAL CHILD DASHBOARDS ---
     const grid = document.createElement('div');
@@ -119,7 +141,7 @@ export async function render(container, { user }) {
               </div>
             </div>
           </div>
-          <button class="btn btn--secondary btn--sm" onclick="window.oikos?.navigate('/calendar?assigned_to=${child.id}')">View Schedule</button>
+          <button class="btn btn--secondary btn--sm schedule-btn" data-child-id="${child.id}">View Schedule</button>
         </div>
         <div id="stats-${child.id}" style="padding: 24px;">
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
@@ -128,6 +150,11 @@ export async function render(container, { user }) {
           </div>
         </div>
       `;
+
+      card.querySelector('.schedule-btn').addEventListener('click', () => {
+        window.oikos?.navigate(`/calendar?assigned_to=${child.id}`);
+      });
+      
       grid.appendChild(card);
     });
 
@@ -143,22 +170,28 @@ export async function render(container, { user }) {
           
           // 1. Alert Banner if in Danger Zone
           if (stats.location?.location_type === 'danger') {
-            statsEl.innerHTML += `
+            const dangerAlert = document.createElement('div');
+            dangerAlert.innerHTML = `
               <div style="background: rgba(255,59,48,0.1); border: 1px solid var(--color-danger); border-radius: 16px; padding: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                   <h3 style="margin: 0 0 4px 0; color: var(--color-danger); display: flex; align-items: center; gap: 8px;"><i data-lucide="siren"></i> DANGER ZONE ALERT</h3>
                   <p style="margin: 0; color: var(--text-main); font-size: 14px;">Last seen in a restricted area at ${new Date(stats.location.updated_at).toLocaleTimeString()}.</p>
                 </div>
-                <button class="btn btn--danger" onclick="window.oikos?.navigate('/location')">Track Now</button>
+                <button class="btn btn--danger track-now-btn">Track Now</button>
               </div>
             `;
+            dangerAlert.querySelector('.track-now-btn').addEventListener('click', () => {
+              window.oikos?.navigate('/location');
+            });
+            statsEl.appendChild(dangerAlert.firstElementChild);
           }
 
           const evPercent = stats.events.total ? Math.round((stats.events.finished / stats.events.total) * 100) : 0;
           const appStats = stats.apps || [];
           const totalAppMinutes = appStats.reduce((sum, a) => sum + a.total_minutes, 0);
 
-          statsEl.innerHTML += `
+          const contentHtml = document.createElement('div');
+          contentHtml.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
               
               <!-- Column 1: Daily Plan -->
@@ -216,6 +249,7 @@ export async function render(container, { user }) {
 
             </div>
           `;
+          statsEl.appendChild(contentHtml.firstElementChild);
           if (window.lucide) window.lucide.createIcons({ el: statsEl });
         }
       } catch (err) {

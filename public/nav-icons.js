@@ -101,6 +101,11 @@ export const NAV_ICONS = {
     e('path', { d: 'M5 17.5c-.5 1-.5 1.8 0 2.5 1 .6 1.9.5 2.5 0' }),
   ),
 
+  'graduation-cap': () => makeSvg(
+    e('path', { d: 'M22 10v6M2 10l10-5 10 5-10 5z' }),
+    e('path', { d: 'M6 12v5c3 3 9 3 12 0v-5' }),
+  ),
+
   'utensils': () => makeSvg(
     e('path', { d: 'M7.5 3.5v8a2 2 0 0 1-2 2h-.5v7' }),
     e('path', { d: 'M5.5 3.5v6M7.5 3.5v6M9.5 3.5v6' }),

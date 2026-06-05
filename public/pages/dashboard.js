@@ -46,12 +46,20 @@ async function renderParentDashboard(grid, user) {
 
   try {
     const res = await apiFetch('/reports/emergency');
-    const pending = (res.data || []).filter(r => r.status === 'pending');
+    const pending = res.data || [];
+    const openRequests = pending.filter(r => r.status === 'pending');
+    const hasSos = openRequests.some(r => r.request_type === 'sos');
     
-    if (pending.length === 0) {
+    if (openRequests.length === 0) {
       emCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>All clear! No pending requests.</div>`;
     } else {
-      emCard.innerHTML += `<div style="color: var(--color-danger); font-weight: bold; margin-bottom: 12px;">You have ${pending.length} pending request(s).</div>`;
+      if (hasSos) {
+        emCard.style.border = '2px solid #FF3B30';
+        emCard.style.animation = 'pulse-red 2s infinite';
+        emCard.innerHTML += `<div style="color: #FF3B30; font-weight: 900; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;"><i data-lucide="megaphone"></i> CRITICAL: SOS ALERT ACTIVE</div>`;
+      } else {
+        emCard.innerHTML += `<div style="color: var(--color-danger); font-weight: bold; margin-bottom: 12px;">You have ${openRequests.length} pending request(s).</div>`;
+      }
       const btn = document.createElement('button');
       btn.className = 'btn btn--primary';
       btn.style.width = '100%';
@@ -156,7 +164,7 @@ async function renderChildDashboard(grid, user) {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const res = await apiFetch(`/calendar?from=${today}&to=${today}&assigned_to=${user.id}`);
-    const routines = (res.data || []).filter(r => r.category === 'chore' || r.category === 'study' || r.category === 'medication');
+    const routines = (res.data || []).filter(r => r.category === 'chore' || r.category === 'study' || r.category === 'medication' || r.category === 'routine');
     
     if (routines.length === 0) {
       routineCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="calendar-check" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>No tasks for today. Enjoy!</div>`;
@@ -167,7 +175,7 @@ async function renderChildDashboard(grid, user) {
       routines.forEach(r => {
         const isDone = r.status === 'done';
         const item = document.createElement('div');
-        item.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg-body); border: 1px solid var(--color-border-subtle); opacity: ${isDone ? 0.6 : 1};`;
+        item.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg-body); border: 1px solid var(--color-border-subtle); opacity: ${isDone ? 0.6 : 1}; position: relative; z-index: 2;`;
         
         item.innerHTML = `
           <div>
@@ -180,13 +188,22 @@ async function renderChildDashboard(grid, user) {
           const btn = document.createElement('button');
           btn.className = 'btn btn--success btn--sm';
           btn.style.padding = '4px 10px';
+          btn.style.position = 'relative';
+          btn.style.zIndex = '10';
           btn.innerHTML = '<i data-lucide="check" style="width: 14px; height: 14px;"></i>';
           btn.onclick = async (e) => {
+            console.log('[DEBUG] Dashboard Routine click for event:', r.id);
             e.preventDefault();
             e.stopPropagation();
             btn.disabled = true;
             try {
-              await apiFetch(`/calendar/${r.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'done' }) });
+              await apiFetch(`/calendar/${r.id}`, { 
+                method: 'PATCH', 
+                body: JSON.stringify({ 
+                  status: 'done',
+                  date: today
+                }) 
+              });
               showToast('Task marked as done!', 'success');
               
               const triggerConfetti = () => {

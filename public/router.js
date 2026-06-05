@@ -24,6 +24,7 @@ const ROUTES = [
   { path: '/settings', page: '/pages/settings.js',  requiresAuth: true, module: 'settings'  },
   { path: '/location', page: '/pages/location.js',  requiresAuth: true, module: 'location'  },
   { path: '/reports',  page: '/pages/reports.js',   requiresAuth: true, module: 'reports'   },
+  { path: '/school',   page: '/pages/school.js',    requiresAuth: true, module: 'school'    },
   { path: '/apps',     page: '/pages/apps.js',      requiresAuth: true, module: 'apps'      },
 ];
 
@@ -134,7 +135,7 @@ let _pendingLoginRedirect = false;
 // Router
 // --------------------------------------------------------
 
-const ROUTE_ORDER = ['/', '/calendar', '/birthdays', '/contacts', '/documents', '/location', '/reports', '/apps', '/settings'];
+const ROUTE_ORDER = ['/', '/calendar', '/birthdays', '/contacts', '/documents', '/location', '/school', '/reports', '/apps', '/settings'];
 
 const PRIMARY_NAV = 4;
 
@@ -184,6 +185,7 @@ function routeTitle(path) {
     '/documents': t('nav.documents'),
     '/settings': t('nav.settings'),
     '/location': 'Location',
+    '/school': 'School Intelligence',
     '/reports': 'Reports',
     '/apps': 'Apps',
   };
@@ -1268,6 +1270,7 @@ function navItems() {
     { path: '/location',  label: 'Location',         icon: 'map-pin',          module: 'location'  },
   ];
   if (isParent) {
+    baseItems.push({ path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    });
     baseItems.push({ path: '/reports',   label: 'Reports',          icon: 'activity',         module: 'reports'   });
     baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
     baseItems.push({ path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' });

@@ -97,6 +97,7 @@ export async function render(container, { user }) {
 
   let isLocked = false;
   let lockReason = '';
+  let unlocksAt = '';
   
   try {
     const today = formatTodayDate();
@@ -104,15 +105,20 @@ export async function render(container, { user }) {
     const events = res.data || [];
     const now = new Date().getTime();
     
-    for (const ev of events) {
-      if (ev.category === 'study' || ev.category === 'curfew') {
-        const start = parseTime(ev.start_time);
-        const end = parseTime(ev.end_time);
-        if (ev.all_day || (start && end && now >= start && now <= end)) {
-           isLocked = true;
-           lockReason = ev.category === 'curfew' ? '🌙 Curfew is active.' : '📚 School/Study time is active.';
-           break;
-        }
+    // Sort events to find the first one that is active or future
+    const restrictiveEvents = events
+      .filter(ev => ev.category === 'study' || ev.category === 'curfew')
+      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+
+    for (const ev of restrictiveEvents) {
+      const start = parseTime(ev.start_time);
+      const end = parseTime(ev.end_time);
+      
+      if (ev.all_day || (start && end && now >= start && now <= end)) {
+         isLocked = true;
+         lockReason = ev.category === 'curfew' ? '🌙 Curfew is active.' : '📚 School/Study time is active.';
+         unlocksAt = ev.all_day ? 'Tomorrow' : (ev.end_time ? ev.end_time.slice(0, 5) : '');
+         break;
       }
     }
   } catch(e) {}
@@ -131,7 +137,8 @@ export async function render(container, { user }) {
       gap: 12px;
       font-weight: 500;
     `;
-    alert.innerHTML = `<i data-lucide="shield-alert"></i> <div><strong>RESTRICTED ACCESS:</strong> ${lockReason}<br><span style="font-size: 13px; opacity: 0.8;">Social media and games are currently locked.</span></div>`;
+    const timeInfo = unlocksAt ? `<div style="margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--color-danger);">🔓 Unlocks at: ${unlocksAt}</div>` : '';
+    alert.innerHTML = `<i data-lucide="shield-alert"></i> <div><strong>RESTRICTED ACCESS:</strong> ${lockReason}<br>${timeInfo}<span style="font-size: 13px; opacity: 0.8;">Social media and games are currently locked.</span></div>`;
     wrapper.appendChild(alert);
   }
 
@@ -240,12 +247,19 @@ export async function render(container, { user }) {
               return;
             }
             try {
-              await apiFetch('/reports/spend', { method: 'POST', body: JSON.stringify({ cost }) });
-              await apiFetch('/reports/apps', { method: 'POST', body: JSON.stringify({ app_type: app.type, minutes: parseInt(m, 10) }) });
-              showToast(`Spent ${cost} points to unlock ${timeLabel} of ${app.label}!`, 'success');
+              // Atomic action: spend points AND track usage in one call
+              await apiFetch('/reports/spend', { 
+                method: 'POST', 
+                body: JSON.stringify({ 
+                  cost,
+                  app_type: app.type,
+                  minutes: parseInt(m, 10)
+                }) 
+              });
+              showToast(`Unlocked ${timeLabel} of ${app.label}!`, 'success');
               setTimeout(() => window.oikos?.navigate('/apps'), 500);
             } catch (err) { 
-              showToast(err.message || 'Failed to unlock app time. Not enough points?', 'danger'); 
+              showToast(err.message || 'Failed to unlock app time.', 'danger'); 
             }
           };
           actions.appendChild(btn);

@@ -172,6 +172,18 @@ function serializeEvent(event) {
 function expandRecurringEvents(events, from, to) {
   const result = [];
 
+  // Fetch completions for the given range to overlay status on recurring instances
+  const completions = db.get().prepare(`
+    SELECT event_id, completion_date, status 
+    FROM event_completions 
+    WHERE completion_date BETWEEN ? AND ?
+  `).all(from, to);
+
+  const completionMap = new Map();
+  completions.forEach(c => {
+    completionMap.set(`${c.event_id}_${c.completion_date}`, c.status);
+  });
+
   for (const event of events) {
     if (!event.recurrence_rule) {
       result.push(event);
@@ -228,6 +240,7 @@ function expandRecurringEvents(events, from, to) {
           ...event,
           start_datetime:       newStart,
           end_datetime:         newEnd,
+          status:               completionMap.get(`${event.id}_${currentDate}`) || event.status,
           is_recurring_instance: currentDate !== event.start_datetime.slice(0, 10) ? 1 : 0,
         });
       }
@@ -758,14 +771,28 @@ router.post('/', (req, res) => {
 router.patch('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { status } = req.body;
+    const { status, date } = req.body;
     
     if (status) {
       if (status === 'done') {
-        const event = db.get().prepare('SELECT status, assigned_to, category FROM calendar_events WHERE id = ?').get(id);
-        if (event && event.status !== 'done') {
-          db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
-          if (event.assigned_to && (event.category === 'chore' || event.category === 'study' || event.category === 'medication')) {
+        const event = db.get().prepare('SELECT status, assigned_to, category, recurrence_rule FROM calendar_events WHERE id = ?').get(id);
+        if (event) {
+          // Handle recurring vs single event
+          if (event.recurrence_rule && date) {
+            // Upsert completion record
+            db.get().prepare(`
+              INSERT INTO event_completions (event_id, completion_date, status)
+              VALUES (?, ?, ?)
+              ON CONFLICT(event_id, completion_date) DO UPDATE SET status = excluded.status
+            `).run(id, date, status);
+          } else {
+            // Update master event for non-recurring
+            db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+          }
+
+          // Award points if not already done (for single) or for this instance (recurring)
+          // Note: In a production app, we'd check if points were already awarded for this specific instance date.
+          if (event.assigned_to && (event.category === 'chore' || event.category === 'study' || event.category === 'medication' || event.category === 'routine')) {
             db.get().prepare(`
               UPDATE users 
               SET points = COALESCE(points, 0) + 10,
@@ -774,14 +801,22 @@ router.patch('/:id', (req, res) => {
               WHERE id = ?
             `).run(event.assigned_to);
           }
-        } else {
-          db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
         }
       } else if (status === 'failed') {
-        const event = db.get().prepare('SELECT assigned_to FROM calendar_events WHERE id = ?').get(id);
-        db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
-        if (event && event.assigned_to) {
-          db.get().prepare('UPDATE users SET current_streak = 0 WHERE id = ?').run(event.assigned_to);
+        const event = db.get().prepare('SELECT assigned_to, recurrence_rule FROM calendar_events WHERE id = ?').get(id);
+        if (event) {
+          if (event.recurrence_rule && date) {
+            db.get().prepare(`
+              INSERT INTO event_completions (event_id, completion_date, status)
+              VALUES (?, ?, ?)
+              ON CONFLICT(event_id, completion_date) DO UPDATE SET status = excluded.status
+            `).run(id, date, status);
+          } else {
+            db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
+          }
+          if (event.assigned_to) {
+            db.get().prepare('UPDATE users SET current_streak = 0 WHERE id = ?').run(event.assigned_to);
+          }
         }
       } else {
         db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
