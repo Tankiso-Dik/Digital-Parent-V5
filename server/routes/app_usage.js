@@ -24,6 +24,11 @@ router.get('/active-role', (req, res) => {
       FROM active_session_state 
       JOIN users ON active_session_state.user_id = users.id 
       WHERE active_session_state.id = 1
+      AND EXISTS (
+        SELECT 1 FROM sessions 
+        WHERE json_extract(sess, '$.userId') = users.id 
+        AND expired_at > (strftime('%s', 'now') * 1000)
+      )
     `).get();
     res.json({ active_role: row ? row.family_role : null });
   } catch (err) {
@@ -35,12 +40,17 @@ router.get('/active-role', (req, res) => {
 // POST /api/v1/app-usage/logs (Called by Extension)
 router.post('/logs', (req, res) => {
   try {
-    // Only track if globally active user is a child
+    // Only track if globally active user is a child AND their session hasn't naturally expired
     const user = db.get().prepare(`
       SELECT users.id, users.family_role 
       FROM active_session_state 
       JOIN users ON active_session_state.user_id = users.id 
       WHERE active_session_state.id = 1
+      AND EXISTS (
+        SELECT 1 FROM sessions 
+        WHERE json_extract(sess, '$.userId') = users.id 
+        AND expired_at > (strftime('%s', 'now') * 1000)
+      )
     `).get();
     
     if (!user || user.family_role !== 'child') {
