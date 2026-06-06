@@ -248,6 +248,15 @@ export async function render(container, { user }) {
               request_type: 'sos'
             }) 
           });
+          
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+              await apiFetch('/location', {
+                method: 'POST',
+                body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, location_type: 'danger' })
+              }).catch(()=>{});
+            }, ()=>{}, { enableHighAccuracy: true });
+          }
           showToast('SOS SIGNAL SENT!', 'success');
           sosBtn.style.animation = 'pulse-red 1s infinite';
           sosBtn.innerHTML = '<i data-lucide="alert-triangle"></i> SOS ACTIVE';
@@ -490,6 +499,35 @@ export async function render(container, { user }) {
       if (!firstLoadCentered && boundsCoords.length > 0 && map && isParent) {
         map.fitBounds(window.L.latLngBounds(boundsCoords), { padding: [50, 50], maxZoom: 16 });
         firstLoadCentered = true;
+      }
+      
+      if (isParent) {
+        const sosRes = await apiFetch('/reports/emergency').catch(()=>null);
+        if (sosRes && sosRes.data) {
+          const sos = sosRes.data.filter(e => e.status === 'pending');
+          let existingAlert = container.querySelector('#map-sos-alert');
+          if (sos.length > 0) {
+            if (!existingAlert) {
+              existingAlert = document.createElement('div');
+              existingAlert.id = 'map-sos-alert';
+              existingAlert.style.cssText = 'position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #FF3B30; color: white; padding: 15px 30px; border-radius: 30px; font-weight: bold; box-shadow: 0 4px 20px rgba(255,59,48,0.5); animation: pulse-red 1s infinite; display: flex; align-items: center; gap: 10px; cursor: pointer;';
+              const mapEl = container.querySelector('#map');
+              if (mapEl) mapEl.parentElement.style.position = 'relative';
+              if (mapEl) mapEl.parentElement.appendChild(existingAlert);
+            }
+            existingAlert.innerHTML = `⚠️ SOS SIGNAL FROM: ${sos.map(e => e.display_name).join(', ')} <button id="dismiss-sos-map" style="margin-left:15px; padding:5px 10px; border-radius:15px; border:none; color:#FF3B30; background:white; cursor:pointer; font-weight:bold;">Dismiss</button>`;
+            
+            existingAlert.querySelector('#dismiss-sos-map').onclick = async (e) => {
+              e.stopPropagation();
+              for (const req of sos) {
+                await apiFetch('/reports/emergency/' + req.id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) }).catch(()=>{});
+              }
+              existingAlert.remove();
+            };
+          } else if (existingAlert) {
+            existingAlert.remove();
+          }
+        }
       }
     } catch(err) {
       console.error(err);

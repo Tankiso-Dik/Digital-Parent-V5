@@ -125,8 +125,8 @@ router.post('/spend', (req, res) => {
 
 router.get('/emergency', (req, res) => {
   try {
-    const user = db.get().prepare('SELECT family_role FROM users WHERE id = ?').get(req.authUserId);
-    const isParent = ['admin', 'parent', 'dad', 'mom', 'grandparent'].includes(user?.family_role);
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user?.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user?.family_role);
 
     let query = `
       SELECT e.*, u.display_name, u.avatar_color
@@ -153,9 +153,9 @@ router.post('/emergency', (req, res) => {
   try {
     const { app_type, reason, request_type } = req.body;
     db.get().prepare(`
-      INSERT INTO emergency_requests (user_id, app_type, reason, request_type)
-      VALUES (?, ?, ?, ?)
-    `).run(req.authUserId, app_type || 'system', reason, request_type || 'app_bypass');
+      INSERT INTO emergency_requests (user_id, app_type, reason)
+      VALUES (?, ?, ?)
+    `).run(req.authUserId, app_type || 'system', reason);
     res.json({ ok: true });
   } catch (err) {
     log.error('POST /emergency error:', err);

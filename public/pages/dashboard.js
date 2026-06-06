@@ -41,12 +41,47 @@ export async function render(container, { user }) {
 
 async function renderScreenControlDashboard(grid, user) {
   let rulesData = { blocked_rules: [], curfews: [] };
+  let emergencyData = [];
   try {
     const res = await apiFetch('/rules');
     if (res && res.blocked_rules) rulesData = res;
     else if (res && res.data) rulesData = res.data;
+    
+    const sosRes = await apiFetch('/reports/emergency');
+    if (sosRes && sosRes.data) {
+      emergencyData = sosRes.data.filter(e => e.status === 'pending');
+    }
   } catch (e) {
-    console.error('Failed to load rules', e);
+    console.error('Failed to load dashboard data', e);
+  }
+
+  if (emergencyData.length > 0) {
+    const sosCard = document.createElement('div');
+    sosCard.style.cssText = 'grid-column: 1 / -1; background: #FF3B30; padding: 24px; border-radius: 16px; color: white; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 8px 30px rgba(255, 59, 48, 0.4);';
+    sosCard.innerHTML = `
+      <div>
+        <h2 style="margin: 0 0 8px 0; display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 900;">
+          <i data-lucide="alert-triangle" style="width: 32px; height: 32px;"></i>
+          EMERGENCY SOS SIGNAL ACTIVE
+        </h2>
+        <p style="margin: 0; font-size: 16px; font-weight: 500; opacity: 0.9;">
+          ${emergencyData.map(e => e.display_name).join(', ')} sent an SOS signal!
+        </p>
+      </div>
+      <button id="view-sos-btn" style="background: white; color: #FF3B30; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;">
+        Track & Dismiss
+      </button>
+    `;
+    grid.appendChild(sosCard);
+    
+    sosCard.querySelector('#view-sos-btn').onclick = async () => {
+      for (const req of emergencyData) {
+        try {
+          await apiFetch('/reports/emergency/' + req.id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+        } catch(e) {}
+      }
+      window.location.hash = '/location';
+    };
   }
 
   const triggerSilentSync = async () => {
