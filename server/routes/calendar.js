@@ -821,6 +821,10 @@ router.patch('/:id', (req, res) => {
           }
         }
       } else if (status === 'confirmed') {
+        const isParent = req.user && (req.user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(req.user.family_role));
+        if (!isParent) {
+          return res.status(403).json({ error: 'Nur Eltern können Aufgaben bestätigen', code: 403 });
+        }
         const event = db.get().prepare('SELECT recurrence_rule FROM calendar_events WHERE id = ?').get(id);
         if (event) {
           if (event.recurrence_rule && date) {
