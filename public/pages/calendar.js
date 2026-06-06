@@ -217,6 +217,47 @@ export async function render(container, { user }) {
       }
       
       if (isParent) {
+        const actionWrap = document.createElement('div');
+        actionWrap.style.cssText = 'display: flex; gap: 8px; align-items: center; position: relative; z-index: 10;';
+
+        const isTask = (ev.category === 'chore' || ev.category === 'study' || ev.category === 'medication' || ev.category === 'routine');
+
+        if (isTask && !isDone) {
+          const actBtn = document.createElement('button');
+          actBtn.className = 'btn btn--success btn--sm';
+          actBtn.innerHTML = 'Mark Done';
+          actBtn.onclick = async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            actBtn.disabled = true;
+            try {
+              await apiFetch(`/calendar/${ev.id}`, { 
+                method: 'PATCH', 
+                body: JSON.stringify({ status: 'done', date: formatDateObj(currentDate) }) 
+              });
+              showToast('Marked as done for child', 'success');
+              await loadData();
+            } catch(err) { showToast('Error', 'danger'); actBtn.disabled = false; }
+          };
+          actionWrap.appendChild(actBtn);
+        } else if (isTask && isDone && !ev.is_confirmed) {
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'btn btn--primary btn--sm';
+          confirmBtn.innerHTML = 'Confirm';
+          confirmBtn.onclick = async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            confirmBtn.disabled = true;
+            try {
+              await apiFetch(`/calendar/${ev.id}`, { 
+                method: 'PATCH', 
+                body: JSON.stringify({ status: 'confirmed', date: formatDateObj(currentDate) }) 
+              });
+              showToast('Task confirmed!', 'success');
+              await loadData();
+            } catch(err) { showToast('Error', 'danger'); confirmBtn.disabled = false; }
+          };
+          actionWrap.appendChild(confirmBtn);
+        }
+
         const delBtn = document.createElement('button');
         delBtn.className = 'btn btn--ghost btn--icon';
         delBtn.style.color = 'var(--text-muted)';
@@ -230,7 +271,9 @@ export async function render(container, { user }) {
             await loadData();
           } catch(err) {}
         };
-        card.appendChild(delBtn);
+        actionWrap.appendChild(delBtn);
+
+        card.appendChild(actionWrap);
       }
 
       item.append(timeCol, node, card);

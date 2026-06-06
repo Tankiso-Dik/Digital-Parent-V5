@@ -1961,6 +1961,14 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_location_requests_user ON location_requests(user_id);
     `,
   },
+  {
+    version: 55,
+    description: 'Add is_confirmed column to calendar_events and event_completions',
+    up: `
+      ALTER TABLE calendar_events ADD COLUMN is_confirmed INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE event_completions ADD COLUMN is_confirmed INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 /**

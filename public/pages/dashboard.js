@@ -309,7 +309,7 @@ async function renderScreenControlDashboard(grid, user) {
     const doneTasks = (res.data || []).filter(r => 
       (r.category === 'chore' || r.category === 'study' || r.category === 'routine' || r.category === 'medication') && 
       r.status === 'done' && 
-      !(r.description || '').includes('[CONFIRMED]')
+      !r.is_confirmed
     );
     
     if (doneTasks.length === 0) {
@@ -335,11 +335,9 @@ async function renderScreenControlDashboard(grid, user) {
         btn.onclick = async (e) => {
           btn.disabled = true;
           try {
-             // Append [CONFIRMED] to the description so it no longer shows in this list
-             const newDesc = (btn.dataset.desc + ' [CONFIRMED]').trim();
              await apiFetch('/calendar/' + btn.dataset.id, { 
                method: 'PATCH',
-               body: JSON.stringify({ description: newDesc })
+               body: JSON.stringify({ status: 'confirmed', date: today })
              });
              showToast('Task confirmed!', 'success');
              grid.innerHTML = '';

@@ -174,14 +174,14 @@ function expandRecurringEvents(events, from, to) {
 
   // Fetch completions for the given range to overlay status on recurring instances
   const completions = db.get().prepare(`
-    SELECT event_id, completion_date, status 
+    SELECT event_id, completion_date, status, is_confirmed
     FROM event_completions 
     WHERE completion_date BETWEEN ? AND ?
   `).all(from, to);
 
   const completionMap = new Map();
   completions.forEach(c => {
-    completionMap.set(`${c.event_id}_${c.completion_date}`, c.status);
+    completionMap.set(`${c.event_id}_${c.completion_date}`, c);
   });
 
   for (const event of events) {
@@ -236,11 +236,13 @@ function expandRecurringEvents(events, from, to) {
           }
         }
 
+        const comp = completionMap.get(`${event.id}_${currentDate}`);
         result.push({
           ...event,
           start_datetime:       newStart,
           end_datetime:         newEnd,
-          status:               completionMap.get(`${event.id}_${currentDate}`) || event.status,
+          status:               comp ? comp.status : event.status,
+          is_confirmed:         comp ? comp.is_confirmed : event.is_confirmed,
           is_recurring_instance: currentDate !== event.start_datetime.slice(0, 10) ? 1 : 0,
         });
       }
@@ -816,6 +818,19 @@ router.patch('/:id', (req, res) => {
           }
           if (event.assigned_to) {
             db.get().prepare('UPDATE users SET current_streak = 0 WHERE id = ?').run(event.assigned_to);
+          }
+        }
+      } else if (status === 'confirmed') {
+        const event = db.get().prepare('SELECT recurrence_rule FROM calendar_events WHERE id = ?').get(id);
+        if (event) {
+          if (event.recurrence_rule && date) {
+            db.get().prepare(`
+              INSERT INTO event_completions (event_id, completion_date, status, is_confirmed)
+              VALUES (?, ?, 'done', 1)
+              ON CONFLICT(event_id, completion_date) DO UPDATE SET is_confirmed = 1
+            `).run(id, date);
+          } else {
+            db.get().prepare('UPDATE calendar_events SET is_confirmed = 1 WHERE id = ?').run(id);
           }
         }
       } else {
