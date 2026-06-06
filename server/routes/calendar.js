@@ -821,7 +821,7 @@ router.patch('/:id', (req, res) => {
           }
         }
       } else if (status === 'confirmed') {
-        const isParent = req.user && (req.user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(req.user.family_role));
+        const isParent = req.authRole === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(req.authFamilyRole);
         if (!isParent) {
           return res.status(403).json({ error: 'Nur Eltern können Aufgaben bestätigen', code: 403 });
         }
