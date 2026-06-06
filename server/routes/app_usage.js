@@ -1,6 +1,7 @@
 import express from 'express';
-import db from '../db.js';
-import log from '../logger.js';
+import * as db from '../db.js';
+import { createLogger } from '../logger.js';
+const log = createLogger('AppUsage');
 
 const router = express.Router();
 
