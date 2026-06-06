@@ -43,10 +43,20 @@ async function renderScreenControlDashboard(grid, user) {
   let rulesData = { blocked_rules: [], curfews: [] };
   try {
     const res = await apiFetch('/rules');
-    if (res && res.data) rulesData = res.data;
+    if (res && res.blocked_rules) rulesData = res;
+    else if (res && res.data) rulesData = res.data;
   } catch (e) {
     console.error('Failed to load rules', e);
   }
+
+  const triggerSilentSync = async () => {
+    try {
+      const syncRes = await fetch('/api/v1/rules/sync');
+      if (syncRes.ok) window.postMessage({ type: 'OIKOS_SYNC_NOW' }, '*');
+    } catch(e) {
+      console.warn('Silent sync failed', e);
+    }
+  };
 
   const getRule = (type, value) => rulesData.blocked_rules.find(r => r.type === type && r.value === value);
 
@@ -56,6 +66,7 @@ async function renderScreenControlDashboard(grid, user) {
         method: 'POST',
         body: JSON.stringify({ type, value, action, limit_minutes: limit })
       });
+      await triggerSilentSync();
       showToast('Rule saved', 'success');
     } catch(e) {
       showToast('Error saving rule', 'danger');
@@ -65,6 +76,7 @@ async function renderScreenControlDashboard(grid, user) {
   const deleteRule = async (id) => {
     try {
       await apiFetch('/rules/rule/' + id, { method: 'DELETE' });
+      await triggerSilentSync();
       showToast('Rule deleted', 'success');
       // reload
       grid.innerHTML = '';
@@ -150,6 +162,36 @@ async function renderScreenControlDashboard(grid, user) {
     btn.onclick = () => deleteRule(btn.dataset.id);
   });
 
+  // 3.5 Active Blocked Rules List
+  const blockedRulesCard = createCard('Active Blocked Rules', 'shield-off', '#FF3B30');
+  grid.appendChild(blockedRulesCard);
+  
+  const activeBlockedRules = rulesData.blocked_rules.filter(r => r.action === 'block' || r.action === 'limit');
+  let blockedListHtml = activeBlockedRules.length === 0 ? 
+    '<div style="color: var(--text-muted); font-size: 14px;">No active rules blocking apps.</div>' :
+    activeBlockedRules.map(r => `
+    <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-body); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle); margin-bottom: 8px;">
+      <div>
+        <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); margin-right: 8px;">${r.type}</span>
+        <span style="font-family: monospace; font-size: 14px;">${r.value}</span>
+      </div>
+      <button class="unblock-rule-btn" data-id="${r.id}" style="background: none; border: none; color: var(--color-danger); cursor: pointer; display: flex; gap: 4px; align-items: center; font-size: 12px;">
+        <i data-lucide="unlock" style="width:14px;"></i> Unblock
+      </button>
+    </div>
+  `).join('');
+
+  blockedRulesCard.innerHTML += `
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Currently active restrictions. Click Unblock to remove them instantly.</p>
+    <div style="display: flex; flex-direction: column;">
+      ${blockedListHtml}
+    </div>
+  `;
+
+  blockedRulesCard.querySelectorAll('.unblock-rule-btn').forEach(btn => {
+    btn.onclick = () => deleteRule(btn.dataset.id);
+  });
+
   // 4. Curfews
   const curfewCard = createCard('Device Curfews', 'clock', '#FF9500');
   grid.appendChild(curfewCard);
@@ -189,6 +231,7 @@ async function renderScreenControlDashboard(grid, user) {
       btn.disabled = true;
       try {
         await apiFetch('/rules/curfew/' + btn.dataset.id, { method: 'DELETE' });
+        await triggerSilentSync();
         showToast('Curfew deleted', 'success');
         grid.innerHTML = '';
         await renderScreenControlDashboard(grid, user);
@@ -211,6 +254,7 @@ async function renderScreenControlDashboard(grid, user) {
         method: 'POST',
         body: JSON.stringify({ start_time: start, end_time: end, days_of_week: days, strict_mode: strict })
       });
+      await triggerSilentSync();
       showToast('Curfew added', 'success');
       grid.innerHTML = '';
       await renderScreenControlDashboard(grid, user);
