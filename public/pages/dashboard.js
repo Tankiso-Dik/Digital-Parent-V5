@@ -74,23 +74,6 @@ async function renderScreenControlDashboard(grid, user) {
     }
   };
 
-  // 1. Quick Control Presets
-  const presetsCard = createCard('Quick Control Presets', 'zap', 'var(--color-accent)');
-  grid.appendChild(presetsCard);
-  presetsCard.innerHTML += `
-    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">One-click rule bundles to instantly shape the digital environment.</p>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <button class="btn btn--secondary" style="justify-content: flex-start; text-align: left;" onclick="window.oikos?.showToast('Coming soon', 'info')">
-        <i data-lucide="book-open" style="color: var(--color-primary);"></i> 
-        <div><strong style="display:block;">Study Mode</strong><span style="font-size:12px; color:var(--text-muted);">Blocks Social + Gaming</span></div>
-      </button>
-      <button class="btn btn--secondary" style="justify-content: flex-start; text-align: left;" onclick="window.oikos?.showToast('Coming soon', 'info')">
-        <i data-lucide="moon" style="color: #5856D6;"></i> 
-        <div><strong style="display:block;">Bedtime Mode</strong><span style="font-size:12px; color:var(--text-muted);">Full curfew active</span></div>
-      </button>
-    </div>
-  `;
-
   // 2. Category Controls
   const categoryCard = createCard('Category Controls', 'layers', 'var(--color-primary)');
   grid.appendChild(categoryCard);
@@ -177,7 +160,7 @@ async function renderScreenControlDashboard(grid, user) {
   
   curfewCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Set Offline Hours. Devices will lock during these times.</p>
-    \${curfewsHtml}
+    ${curfewsHtml}
     
     <div style="background: var(--bg-body); padding: 16px; border-radius: 12px; border: 1px solid var(--color-border-subtle); margin-bottom: 16px; margin-top: 16px;">
       <div style="font-weight: bold; margin-bottom: 8px;">New Curfew</div>
@@ -229,9 +212,31 @@ async function renderScreenControlDashboard(grid, user) {
         <li><strong>${urlRules.length}</strong> URL rules</li>
         <li><strong>${rulesData.curfews.length}</strong> active Curfews</li>
       </ul>
-      <button class="btn btn--success" style="width: 100%; margin-top: 20px; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules to Extension</button>
+      <button class="btn btn--success" id="sync-rules-btn" style="width: 100%; margin-top: 20px; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules to Extension</button>
     </div>
   `;
+
+  summaryCard.querySelector('#sync-rules-btn').onclick = async (e) => {
+    e.preventDefault();
+    const btn = e.target;
+    const oldText = btn.innerHTML;
+    btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Syncing...';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/v1/rules/sync');
+      if (res.ok) {
+        showToast('Rules compiled and synced successfully!', 'success');
+      } else {
+        throw new Error('Sync failed');
+      }
+    } catch(err) {
+      showToast('Error syncing rules. Is the extension connected?', 'danger');
+    }
+    btn.innerHTML = oldText;
+    btn.disabled = false;
+    if (window.lucide) window.lucide.createIcons();
+  };
+
 }
 
 async function renderChildDashboard(grid, user) {

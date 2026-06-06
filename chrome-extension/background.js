@@ -1,5 +1,5 @@
-const API_URL = 'http://localhost:4000/api/v1/app-usage/logs';
-const SYNC_URL = 'http://localhost:4000/api/v1/rules/sync';
+const API_URL = 'http://localhost:3000/api/v1/app-usage/logs';
+const SYNC_URL = 'http://localhost:3000/api/v1/rules/sync';
 
 async function fetchRules() {
   try {
@@ -94,7 +94,7 @@ async function getActiveRole() {
   // Only fetch from backend if our cached role is older than 30 seconds
   if (Date.now() - lastRoleCheckTime > 30000) {
     try {
-      const res = await fetch('http://localhost:4000/api/v1/app-usage/active-role', { credentials: 'include' });
+      const res = await fetch('http://localhost:3000/api/v1/app-usage/active-role', { credentials: 'include' });
       const data = await res.json();
       globalActiveRole = data.active_role;
       lastRoleCheckTime = Date.now();
