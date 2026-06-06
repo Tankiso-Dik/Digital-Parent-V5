@@ -238,6 +238,7 @@ app.get('/api/v1/openapi.json', sendOpenApi);
 app.get('/openapi.json', sendOpenApi);
 
 // Alle weiteren API-Routen erfordern Authentifizierung + CSRF-Schutz
+app.use('/api/v1/app-usage', appUsageRouter);
 app.use('/api/v1', requireAuth);
 app.use('/api/v1', (req, res, next) => {
   try {
@@ -253,7 +254,6 @@ app.use('/api/v1', (req, res, next) => {
     return res.status(403).json({ error: 'This account can only access Split expenses.', code: 403 });
   }
 });
-app.use('/api/v1/app-usage', appUsageRouter);
 app.use('/api/v1', csrfMiddleware);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/tasks', tasksRouter);
