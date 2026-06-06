@@ -72,11 +72,12 @@ router.post('/request', (req, res) => {
     const children = db.get().prepare("SELECT id FROM users WHERE family_role = 'child'").all();
     const stmt = db.get().prepare(`INSERT INTO location_requests (user_id, status) VALUES (?, 'pending')`);
     
-    db.transaction(() => {
+    const tx = db.get().transaction(() => {
        for (const child of children) {
           stmt.run(child.id);
        }
     });
+    tx();
 
     res.json({ ok: true });
   } catch (err) {

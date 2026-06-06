@@ -20,10 +20,8 @@ const ROUTES = [
   { path: '/birthdays', page: '/pages/birthdays.js', requiresAuth: true, module: 'birthdays' },
   { path: '/calendar',  page: '/pages/calendar.js',  requiresAuth: true, module: 'calendar'  },
   { path: '/contacts', page: '/pages/contacts.js',  requiresAuth: true, module: 'contacts'  },
-  { path: '/documents', page: '/pages/documents.js', requiresAuth: true, module: 'documents' },
   { path: '/settings', page: '/pages/settings.js',  requiresAuth: true, module: 'settings'  },
   { path: '/location', page: '/pages/location.js',  requiresAuth: true, module: 'location'  },
-  { path: '/reports',  page: '/pages/reports.js',   requiresAuth: true, module: 'reports'   },
   { path: '/school',   page: '/pages/school.js',    requiresAuth: true, module: 'school'    },
   { path: '/apps',     page: '/pages/apps.js',      requiresAuth: true, module: 'apps'      },
 ];
@@ -135,7 +133,7 @@ let _pendingLoginRedirect = false;
 // Router
 // --------------------------------------------------------
 
-const ROUTE_ORDER = ['/', '/calendar', '/birthdays', '/contacts', '/documents', '/location', '/school', '/reports', '/apps', '/settings'];
+const ROUTE_ORDER = ['/', '/calendar', '/location', '/apps', '/school', '/contacts', '/birthdays', '/settings'];
 
 const PRIMARY_NAV = 4;
 
@@ -182,11 +180,9 @@ function routeTitle(path) {
     '/calendar': 'Daily Plan',
     '/birthdays': t('nav.birthdays'),
     '/contacts': t('nav.contacts'),
-    '/documents': t('nav.documents'),
     '/settings': t('nav.settings'),
     '/location': 'Location',
     '/school': 'School Intelligence',
-    '/reports': 'Reports',
     '/apps': 'Apps',
   };
   return map[path] || _thirdPartyModules.find((module) => module.route?.path === path)?.menu?.label || getAppName();
@@ -1265,19 +1261,14 @@ function navItems() {
   
   const baseItems = [
     { path: '/',          label: t('nav.dashboard'), icon: 'layout-dashboard', module: 'dashboard' },
-    { path: '/calendar', label: 'Daily Plan', icon: 'calendar', module: 'calendar' },
-    
+    { path: '/calendar',  label: 'Daily Plan',       icon: 'calendar',         module: 'calendar'  },
     { path: '/location',  label: 'Location',         icon: 'map-pin',          module: 'location'  },
+    { path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      },
+    { path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    },
+    { path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  },
+    { path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' },
+    { path: '/settings',  label: t('settings.sectionFamily'), icon: 'users',   module: 'settings'  }
   ];
-  baseItems.push({ path: '/reports',   label: 'Reports',          icon: 'activity',         module: 'reports'   });
-  baseItems.push({ path: '/apps',      label: 'Apps',             icon: 'layout-grid',      module: 'apps'      });
-  baseItems.push({ path: '/birthdays', label: t('nav.birthdays'), icon: 'cake',             module: 'birthdays' });
-  baseItems.push({ path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  });
-  baseItems.push({ path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' });
-  
-  baseItems.push({ path: '/school',    label: 'School',           icon: 'graduation-cap',   module: 'school'    });
-  
-  baseItems.push({ path: '/settings',  label: t('settings.sectionFamily'),  icon: 'users',         module: 'settings'  });
 
   const thirdPartyItems = _thirdPartyModules
     .filter((module) => module.enabled && module.status === 'enabled' && module.menu?.show && module.route?.path)

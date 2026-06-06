@@ -88,6 +88,7 @@ export async function render(container, { user }) {
   let familyZones = [];
   const zoneMarkers = [];
   const childMarkers = new Map();
+  let firstLoadCentered = false;
 
   async function loadZones() {
     try {
@@ -463,8 +464,10 @@ export async function render(container, { user }) {
         });
       }
 
+      const boundsCoords = [];
       data.forEach(loc => {
         if (loc.lat && loc.lng) {
+          boundsCoords.push([loc.lat, loc.lng]);
           if (childMarkers.has(loc.user_id)) {
             childMarkers.get(loc.user_id).remove();
           }
@@ -483,6 +486,11 @@ export async function render(container, { user }) {
           }
         }
       });
+
+      if (!firstLoadCentered && boundsCoords.length > 0 && map && isParent) {
+        map.fitBounds(window.L.latLngBounds(boundsCoords), { padding: [50, 50], maxZoom: 16 });
+        firstLoadCentered = true;
+      }
     } catch(err) {
       console.error(err);
     }
