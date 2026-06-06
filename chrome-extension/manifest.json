@@ -19,5 +19,12 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "Oikos Parent Monitor"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["blocker.js"],
+      "run_at": "document_start"
+    }
+  ]
 }

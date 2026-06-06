@@ -1920,6 +1920,34 @@ const MIGRATIONS = [
       INSERT OR IGNORE INTO active_session_state (id, user_id) VALUES (1, NULL);
     `,
   },
+  {
+    version: 53,
+    description: 'Implement Screen Control Policy Engine tables',
+    up: `
+      DROP TABLE IF EXISTS blocked_apps;
+      
+      CREATE TABLE IF NOT EXISTS blocked_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL CHECK(type IN ('category', 'domain', 'wildcard')),
+        value TEXT NOT NULL,
+        action TEXT NOT NULL DEFAULT 'block' CHECK(action IN ('block', 'limit', 'allow')),
+        limit_minutes INTEGER,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      ALTER TABLE curfews ADD COLUMN strict_mode INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE curfews ADD COLUMN message_id INTEGER REFERENCES block_messages(id) ON DELETE SET NULL;
+
+      CREATE TABLE IF NOT EXISTS rule_presets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        rules_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
 ];
 
 /**

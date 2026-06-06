@@ -26,8 +26,8 @@ export async function render(container, { user }) {
   container.replaceChildren(wrapper);
 
   if (isParent) {
-    // PARENT DASHBOARD
-    await renderParentDashboard(grid, user);
+    // PARENT DASHBOARD (Screen Control Setup)
+    await renderScreenControlDashboard(grid, user);
     if (!localStorage.getItem('dp_setup_wizard')) {
       showOnboardingWizard(wrapper);
     }
@@ -39,117 +39,179 @@ export async function render(container, { user }) {
   if (window.lucide) window.lucide.createIcons();
 }
 
-async function renderParentDashboard(grid, user) {
-  // 1. Pending Emergency Requests
-  const emCard = createCard('Emergency Requests', 'shield-alert', 'var(--color-danger)');
-  grid.appendChild(emCard);
-
+async function renderScreenControlDashboard(grid, user) {
+  let rulesData = { blocked_rules: [], curfews: [] };
   try {
-    const res = await apiFetch('/reports/emergency');
-    const pending = res.data || [];
-    const openRequests = pending.filter(r => r.status === 'pending');
-    const hasSos = openRequests.some(r => r.request_type === 'sos');
-    
-    if (openRequests.length === 0) {
-      emCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>All clear! No pending requests.</div>`;
-    } else {
-      if (hasSos) {
-        emCard.style.border = '2px solid #FF3B30';
-        emCard.style.animation = 'pulse-red 2s infinite';
-        emCard.innerHTML += `<div style="color: #FF3B30; font-weight: 900; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;"><i data-lucide="megaphone"></i> CRITICAL: SOS ALERT ACTIVE</div>`;
-      } else {
-        emCard.innerHTML += `<div style="color: var(--color-danger); font-weight: bold; margin-bottom: 12px;">You have ${openRequests.length} pending request(s).</div>`;
-      }
-      const btn = document.createElement('button');
-      btn.className = 'btn btn--primary';
-      btn.style.width = '100%';
-      btn.textContent = 'Review Requests';
-      btn.onclick = (e) => {
-        e.preventDefault();
-        window.oikos?.navigate('/reports');
-      };
-      emCard.appendChild(btn);
-    }
-  } catch(e) {
-    emCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load requests.</div>`;
+    const res = await apiFetch('/rules');
+    if (res && res.data) rulesData = res.data;
+  } catch (e) {
+    console.error('Failed to load rules', e);
   }
 
-  // 2. Child Locations
-  const locCard = createCard('Family Locations', 'map-pin', 'var(--color-primary)');
-  grid.appendChild(locCard);
+  const getRule = (type, value) => rulesData.blocked_rules.find(r => r.type === type && r.value === value);
 
-  try {
-    const res = await apiFetch('/location');
-    const locations = res.data || [];
-    
-    if (locations.length === 0) {
-      locCard.innerHTML += `<div style="color: var(--text-muted);">No recent location data.</div>`;
-    } else {
-      const list = locations.map(l => {
-        const zoneDisplay = l.zone_name || (l.location_type === 'unknown' ? 'Transit' : l.location_type);
-        return `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle);">
-            <div style="font-weight: 500;">${l.display_name}</div>
-            <div style="color: ${l.location_type === 'danger' ? 'var(--color-danger)' : 'var(--text-secondary)'}; font-size: 13px; text-transform: capitalize;">
-              <i data-lucide="${l.location_type === 'danger' ? 'alert-triangle' : 'map'}" style="width: 14px; height: 14px; margin-right: 4px;"></i>${zoneDisplay}
-            </div>
-          </div>
-        `;
-      }).join('');
-      locCard.innerHTML += list;
+  const saveRule = async (type, value, action, limit = null) => {
+    try {
+      await apiFetch('/rules/rule', {
+        method: 'POST',
+        body: JSON.stringify({ type, value, action, limit_minutes: limit })
+      });
+      showToast('Rule saved', 'success');
+    } catch(e) {
+      showToast('Error saving rule', 'danger');
     }
-    const btn = document.createElement('button');
-    btn.className = 'btn btn--secondary';
-    btn.style.width = '100%';
-    btn.style.marginTop = '16px';
-    btn.textContent = 'View Live Map';
-    btn.onclick = (e) => {
-      e.preventDefault();
-      window.oikos?.navigate('/location');
-    };
-    locCard.appendChild(btn);
-  } catch(e) {
-    locCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load locations.</div>`;
-  }
+  };
 
-  // 3. Children Rewards Overview
-  const rewardsCard = createCard('Children Rewards & Chores', 'star', '#FF9500');
-  grid.appendChild(rewardsCard);
-  try {
-    const usersRes = await apiFetch('/auth/users');
-    const children = (usersRes.data || []).filter(u => u.family_role === 'child');
-    if (children.length === 0) {
-      rewardsCard.innerHTML += `<div style="padding: 20px 0; color: var(--text-muted);">No child accounts found.</div>`;
-    } else {
-      for (const child of children) {
-        rewardsCard.innerHTML += `
-          <div style="padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-weight: 600; font-size: 15px;">${child.display_name}</div>
-            <div style="display: flex; gap: 16px; font-size: 13px; font-weight: bold;">
-              <span style="color: #FF9500; display:flex; align-items:center; gap:4px;"><i data-lucide="star" style="width:16px; height:16px;"></i> ${child.points || 0} pts</span>
-              <span style="color: #FF3B30; display:flex; align-items:center; gap:4px;"><i data-lucide="flame" style="width:16px; height:16px;"></i> ${child.current_streak || 0} days</span>
-            </div>
-          </div>
-        `;
-      }
+  const deleteRule = async (id) => {
+    try {
+      await apiFetch('/rules/rule/' + id, { method: 'DELETE' });
+      showToast('Rule deleted', 'success');
+      // reload
+      grid.innerHTML = '';
+      await renderScreenControlDashboard(grid, user);
+    } catch(e) {
+      showToast('Error deleting rule', 'danger');
     }
-  } catch(e) {
-    rewardsCard.innerHTML += `<div style="color: var(--text-muted);">Failed to load rewards.</div>`;
-  }
+  };
 
-  // 3. Quick Links
-  const linksCard = createCard('Quick Actions', 'zap', 'var(--color-accent)');
-  grid.appendChild(linksCard);
-  
-  linksCard.innerHTML += `
+  // 1. Quick Control Presets
+  const presetsCard = createCard('Quick Control Presets', 'zap', 'var(--color-accent)');
+  grid.appendChild(presetsCard);
+  presetsCard.innerHTML += `
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">One-click rule bundles to instantly shape the digital environment.</p>
     <div style="display: flex; flex-direction: column; gap: 12px;">
-      <button class="btn btn--secondary" id="dash-link-calendar" style="justify-content: flex-start;"><i data-lucide="calendar"></i> Manage Daily Plan</button>
-      <button class="btn btn--secondary" id="dash-link-reports" style="justify-content: flex-start;"><i data-lucide="pie-chart"></i> View App Usage</button>
+      <button class="btn btn--secondary" style="justify-content: flex-start; text-align: left;" onclick="window.oikos?.showToast('Coming soon', 'info')">
+        <i data-lucide="book-open" style="color: var(--color-primary);"></i> 
+        <div><strong style="display:block;">Study Mode</strong><span style="font-size:12px; color:var(--text-muted);">Blocks Social + Gaming</span></div>
+      </button>
+      <button class="btn btn--secondary" style="justify-content: flex-start; text-align: left;" onclick="window.oikos?.showToast('Coming soon', 'info')">
+        <i data-lucide="moon" style="color: #5856D6;"></i> 
+        <div><strong style="display:block;">Bedtime Mode</strong><span style="font-size:12px; color:var(--text-muted);">Full curfew active</span></div>
+      </button>
     </div>
   `;
+
+  // 2. Category Controls
+  const categoryCard = createCard('Category Controls', 'layers', 'var(--color-primary)');
+  grid.appendChild(categoryCard);
   
-  linksCard.querySelector('#dash-link-calendar').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/calendar'); };
-  linksCard.querySelector('#dash-link-reports').onclick = (e) => { e.preventDefault(); window.oikos?.navigate('/reports'); };
+  const cats = [
+    { id: 'social', name: 'Social Media', desc: 'TikTok, Instagram, Snapchat' },
+    { id: 'gaming', name: 'Gaming', desc: 'Roblox, Minecraft, Steam' },
+    { id: 'education', name: 'Education', desc: 'Wikipedia, Khan Academy' }
+  ];
+
+  let catHtml = `<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Manage broad app categories across all devices.</p>`;
+  cats.forEach(c => {
+    const rule = getRule('category', c.id) || { action: 'allow' };
+    catHtml += `
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 12px; margin-bottom: 12px;">
+        <div>
+          <strong style="display: block;">${c.name}</strong>
+          <span style="font-size: 12px; color: var(--text-muted);">${c.desc}</span>
+        </div>
+        <select class="input cat-select" data-cat="${c.id}" style="width: 120px; padding: 6px;">
+          <option value="allow" ${rule.action==='allow'?'selected':''}>Allow</option>
+          <option value="limit" ${rule.action==='limit'?'selected':''}>Limit (1h)</option>
+          <option value="block" ${rule.action==='block'?'selected':''}>Block</option>
+        </select>
+      </div>
+    `;
+  });
+  categoryCard.innerHTML += catHtml;
+  categoryCard.querySelectorAll('.cat-select').forEach(sel => {
+    sel.addEventListener('change', (e) => {
+      saveRule('category', e.target.dataset.cat, e.target.value, e.target.value === 'limit' ? 60 : null);
+    });
+  });
+
+  // 3. Manual URL Blocking
+  const urlCard = createCard('Manual URL Blocking', 'globe', '#FF3B30');
+  grid.appendChild(urlCard);
+  
+  const urlRules = rulesData.blocked_rules.filter(r => r.type === 'domain' || r.type === 'wildcard');
+  let urlListHtml = urlRules.map(r => `
+    <div style="display: flex; justify-content: space-between; background: var(--bg-body); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle);">
+      <span style="font-family: monospace;">${r.value}</span>
+      <button class="del-url-btn" data-id="${r.id}" style="background: none; border: none; color: var(--color-danger); cursor: pointer;"><i data-lucide="trash-2" style="width:16px;"></i></button>
+    </div>
+  `).join('');
+
+  urlCard.innerHTML += `
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Precision control for specific websites.</p>
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <input type="text" id="new-url-input" class="input" placeholder="e.g. *.discord.com" style="flex: 1;">
+      <button class="btn btn--primary" id="add-url-btn">Block</button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      ${urlListHtml}
+    </div>
+  `;
+
+  urlCard.querySelector('#add-url-btn').onclick = async () => {
+    const val = urlCard.querySelector('#new-url-input').value.trim();
+    if(!val) return;
+    const type = val.includes('*') ? 'wildcard' : 'domain';
+    await saveRule(type, val, 'block');
+    grid.innerHTML = '';
+    await renderScreenControlDashboard(grid, user);
+  };
+  urlCard.querySelectorAll('.del-url-btn').forEach(btn => {
+    btn.onclick = () => deleteRule(btn.dataset.id);
+  });
+
+  // 4. Curfews
+  const curfewCard = createCard('Device Curfews', 'clock', '#FF9500');
+  grid.appendChild(curfewCard);
+  
+  let curfewsHtml = rulesData.curfews.map(c => `
+    <div style="background: var(--bg-body); padding: 16px; border-radius: 12px; border: 1px solid var(--color-border-subtle); margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+        <strong>${c.start_time} - ${c.end_time}</strong>
+        <button class="del-curfew-btn" data-id="${c.id}" style="background:none;border:none;color:var(--color-danger);cursor:pointer;"><i data-lucide="trash-2" style="width:16px;"></i></button>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted);">Active Days: ${JSON.parse(c.days_of_week||'[]').join(', ')}</div>
+    </div>
+  `).join('');
+
+  curfewCard.innerHTML += `
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Set Offline Hours. Devices will lock during these times.</p>
+    ${curfewsHtml}
+    <button class="btn btn--secondary" id="add-curfew-btn" style="width: 100%;"><i data-lucide="plus"></i> Add Curfew</button>
+  `;
+
+  curfewCard.querySelectorAll('.del-curfew-btn').forEach(btn => {
+    btn.onclick = async () => {
+      await apiFetch('/rules/curfew/' + btn.dataset.id, { method: 'DELETE' });
+      grid.innerHTML = '';
+      await renderScreenControlDashboard(grid, user);
+    };
+  });
+  curfewCard.querySelector('#add-curfew-btn').onclick = async () => {
+    // Basic mock creation for now
+    await apiFetch('/rules/curfew', {
+      method: 'POST',
+      body: JSON.stringify({ start_time: '21:00', end_time: '07:00', days_of_week: [1,2,3,4,5], strict_mode: true })
+    });
+    grid.innerHTML = '';
+    await renderScreenControlDashboard(grid, user);
+  };
+
+  // 5. Live Summary Panel
+  const summaryCard = createCard('Policy Summary', 'shield-check', 'var(--color-success)');
+  grid.appendChild(summaryCard);
+  
+  summaryCard.innerHTML += `
+    <div style="background: rgba(52, 199, 89, 0.1); padding: 20px; border-radius: 16px; border: 1px solid rgba(52, 199, 89, 0.3);">
+      <h4 style="margin: 0 0 16px 0; color: var(--color-success); display: flex; align-items: center; gap: 8px;"><i data-lucide="activity"></i> Active Enforcement</h4>
+      <ul style="margin: 0; padding-left: 20px; color: var(--text-main); font-size: 14px; line-height: 1.8;">
+        <li><strong>${rulesData.blocked_rules.filter(r=>r.type==='category').length}</strong> Category rules</li>
+        <li><strong>${urlRules.length}</strong> URL rules</li>
+        <li><strong>${rulesData.curfews.length}</strong> active Curfews</li>
+      </ul>
+      <button class="btn btn--success" style="width: 100%; margin-top: 20px; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules to Extension</button>
+    </div>
+  `;
 }
 
 async function renderChildDashboard(grid, user) {

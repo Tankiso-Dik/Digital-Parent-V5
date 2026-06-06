@@ -1,4 +1,23 @@
 const API_URL = 'http://localhost:4000/api/v1/app-usage/logs';
+const SYNC_URL = 'http://localhost:4000/api/v1/rules/sync';
+
+async function fetchRules() {
+  try {
+    const res = await fetch(SYNC_URL, { credentials: 'include' });
+    if (!res.ok) return;
+    const payload = await res.json();
+    if (!payload.error) {
+      await chrome.storage.local.set({ rules_payload: payload });
+    }
+  } catch (e) {}
+}
+
+// Initial fetch & setup alarm
+fetchRules();
+chrome.alarms.create('syncRules', { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'syncRules') fetchRules();
+});
 
 let globalActiveRole = null;
 let lastRoleCheckTime = 0;
