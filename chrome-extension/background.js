@@ -7,7 +7,14 @@ async function fetchRules() {
     if (!res.ok) return;
     const payload = await res.json();
     if (!payload.error) {
-      await chrome.storage.local.set({ rules_payload: payload });
+      const data = await chrome.storage.local.get(['rules_payload']);
+      const currentPayload = data.rules_payload;
+      
+      // Update if no local payload, or if version/timestamp changed
+      if (!currentPayload || !currentPayload.meta || payload.meta.last_updated !== currentPayload.meta.last_updated) {
+        console.log('[Oikos] Rules updated to version:', payload.meta.last_updated);
+        await chrome.storage.local.set({ rules_payload: payload });
+      }
     }
   } catch (e) {}
 }
