@@ -39,7 +39,8 @@ async function updateDailyUsage() {
   session.lastTickTime = now;
   await chrome.storage.local.set({ activeSession: session });
   
-  const today = new Date().toISOString().split('T')[0];
+  const nowObj = new Date();
+  const today = nowObj.getFullYear() + '-' + String(nowObj.getMonth() + 1).padStart(2, '0') + '-' + String(nowObj.getDate()).padStart(2, '0');
   let daily = data.daily_usage || { date: today, usage: {} };
   if (daily.date !== today) daily = { date: today, usage: {} };
   
