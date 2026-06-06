@@ -103,8 +103,15 @@ async function renderScreenControlDashboard(grid, user) {
   });
   categoryCard.innerHTML += catHtml;
   categoryCard.querySelectorAll('.cat-select').forEach(sel => {
-    sel.addEventListener('change', (e) => {
-      saveRule('category', e.target.dataset.cat, e.target.value, e.target.value === 'limit' ? 60 : null);
+    sel.addEventListener('change', async (e) => {
+      sel.disabled = true;
+      try {
+        await saveRule('category', e.target.dataset.cat, e.target.value, e.target.value === 'limit' ? 60 : null);
+        grid.innerHTML = '';
+        await renderScreenControlDashboard(grid, user);
+      } catch (err) {
+        sel.disabled = false;
+      }
     });
   });
 
@@ -179,24 +186,38 @@ async function renderScreenControlDashboard(grid, user) {
 
   curfewCard.querySelectorAll('.del-curfew-btn').forEach(btn => {
     btn.onclick = async () => {
-      await apiFetch('/rules/curfew/' + btn.dataset.id, { method: 'DELETE' });
-      grid.innerHTML = '';
-      await renderScreenControlDashboard(grid, user);
+      btn.disabled = true;
+      try {
+        await apiFetch('/rules/curfew/' + btn.dataset.id, { method: 'DELETE' });
+        showToast('Curfew deleted', 'success');
+        grid.innerHTML = '';
+        await renderScreenControlDashboard(grid, user);
+      } catch (err) {
+        showToast('Error deleting curfew', 'danger');
+        btn.disabled = false;
+      }
     };
   });
-  curfewCard.querySelector('#add-curfew-btn').onclick = async () => {
-    const start = curfewCard.querySelector('#new-curfew-start').value;
-    const end = curfewCard.querySelector('#new-curfew-end').value;
-    const daysStr = curfewCard.querySelector('#new-curfew-days').value;
-    const strict = curfewCard.querySelector('#new-curfew-strict').checked;
-    const days = daysStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-    
-    await apiFetch('/rules/curfew', {
-      method: 'POST',
-      body: JSON.stringify({ start_time: start, end_time: end, days_of_week: days, strict_mode: strict })
-    });
-    grid.innerHTML = '';
-    await renderScreenControlDashboard(grid, user);
+  curfewCard.querySelector('#add-curfew-btn').onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const start = curfewCard.querySelector('#new-curfew-start').value;
+      const end = curfewCard.querySelector('#new-curfew-end').value;
+      const daysStr = curfewCard.querySelector('#new-curfew-days').value;
+      const strict = curfewCard.querySelector('#new-curfew-strict').checked;
+      const days = daysStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+      
+      await apiFetch('/rules/curfew', {
+        method: 'POST',
+        body: JSON.stringify({ start_time: start, end_time: end, days_of_week: days, strict_mode: strict })
+      });
+      showToast('Curfew added', 'success');
+      grid.innerHTML = '';
+      await renderScreenControlDashboard(grid, user);
+    } catch (err) {
+      showToast('Error adding curfew', 'danger');
+      e.target.disabled = false;
+    }
   };
 
 

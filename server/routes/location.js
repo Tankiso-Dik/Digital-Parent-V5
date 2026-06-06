@@ -50,10 +50,53 @@ router.post('/', (req, res) => {
       INSERT INTO child_location_history (user_id, lat, lng, zone_name)
       VALUES (?, ?, ?, ?)
     `).run(req.authUserId, lat || 0, lng || 0, zone_name || null);
+
+    // Clear pending requests
+    db.get().prepare(`
+      UPDATE location_requests SET status = 'completed' WHERE user_id = ? AND status = 'pending'
+    `).run(req.authUserId);
     
     res.json({ ok: true });
   } catch (err) {
     log.error('POST / error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.post('/request', (req, res) => {
+  try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
+    const children = db.get().prepare("SELECT id FROM users WHERE family_role = 'child'").all();
+    const stmt = db.get().prepare(`INSERT INTO location_requests (user_id, status) VALUES (?, 'pending')`);
+    
+    db.transaction(() => {
+       for (const child of children) {
+          stmt.run(child.id);
+       }
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('POST /request error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+router.get('/pending-status', (req, res) => {
+  try {
+    // Only check for requests newer than 15 minutes to avoid perma-locking
+    const pending = db.get().prepare(`
+      SELECT id FROM location_requests 
+      WHERE user_id = ? AND status = 'pending' 
+      AND (cast(strftime('%s', 'now') as integer) - cast(strftime('%s', requested_at) as integer)) < 900
+      LIMIT 1
+    `).get(req.authUserId);
+    
+    res.json({ pending: !!pending });
+  } catch (err) {
     res.status(500).json({ error: 'Internal server error.' });
   }
 });

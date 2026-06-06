@@ -154,3 +154,98 @@ const auth = {
 };
 
 export { api, auth, apiFetch, ApiError };
+
+// --------------------------------------------------------
+// Mandatory Location Sharing Polling
+// --------------------------------------------------------
+
+let locationLockActive = false;
+
+function enforceLocationLock() {
+  if (locationLockActive) return;
+  locationLockActive = true;
+  document.body.style.overflow = 'hidden';
+  const overlay = document.createElement('div');
+  overlay.id = 'oikos-location-lock';
+  overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; font-family: system-ui;';
+  overlay.innerHTML = `
+    <div style="max-width: 400px; padding: 30px; background: rgba(255,255,255,0.1); border-radius: 16px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
+      <h2 style="margin: 0 0 15px 0; font-size: 24px;">📍 Location Request</h2>
+      <p style="margin: 0 0 25px 0; font-size: 16px; color: #ccc;">Your parent has requested your current location. Please share it to unlock this device.</p>
+      <button id="oikos-share-loc-btn" style="width: 100%; padding: 15px; font-size: 16px; font-weight: bold; border-radius: 8px; border: none; background: #007AFF; color: white; cursor: pointer; transition: all 0.2s;">Share Location</button>
+      <p id="oikos-loc-error" style="color: #FF3B30; margin-top: 15px; font-size: 14px; display: none;"></p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('oikos-share-loc-btn').onclick = async (e) => {
+    const btn = e.target;
+    btn.innerText = 'Sharing...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    if (!navigator.geolocation) {
+       const errEl = document.getElementById('oikos-loc-error');
+       errEl.innerText = 'Geolocation not supported by browser.';
+       errEl.style.display = 'block';
+       btn.innerText = 'Share Location';
+       btn.disabled = false;
+       btn.style.opacity = '1';
+       return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+       try {
+         await apiFetch('/location', {
+           method: 'POST',
+           body: JSON.stringify({ location_type: 'unknown', lat: pos.coords.latitude, lng: pos.coords.longitude })
+         });
+         removeLocationLock();
+       } catch (err) {
+         const errEl = document.getElementById('oikos-loc-error');
+         errEl.innerText = 'Failed to send to server.';
+         errEl.style.display = 'block';
+         btn.innerText = 'Share Location';
+         btn.disabled = false;
+         btn.style.opacity = '1';
+       }
+    }, (err) => {
+       const errEl = document.getElementById('oikos-loc-error');
+       errEl.innerText = 'Access Denied. You must allow location access in your browser settings to unlock.';
+       errEl.style.display = 'block';
+       btn.innerText = 'Share Location';
+       btn.disabled = false;
+       btn.style.opacity = '1';
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+}
+
+function removeLocationLock() {
+  locationLockActive = false;
+  document.body.style.overflow = '';
+  const el = document.getElementById('oikos-location-lock');
+  if (el) el.remove();
+}
+
+setInterval(async () => {
+  try {
+    const meRes = await fetch(`${API_BASE}/auth/me`, { credentials: 'same-origin', cache: 'no-store' }).catch(()=>null);
+    if (!meRes || !meRes.ok) return;
+    const me = await meRes.json();
+    if (me && me.user && me.user.family_role === 'child') {
+       const pendingRes = await fetch(`${API_BASE}/location/pending-status`, { credentials: 'same-origin', cache: 'no-store' }).catch(()=>null);
+       if (pendingRes && pendingRes.ok) {
+          const data = await pendingRes.json();
+          if (data.pending) {
+             enforceLocationLock();
+          } else {
+             removeLocationLock();
+          }
+       }
+    } else {
+       removeLocationLock();
+    }
+  } catch (e) {
+    // Ignore offline errors
+  }
+}, 10000);

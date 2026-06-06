@@ -89,6 +89,14 @@ function shouldBlock(currentDomain, payload, usageObj) {
 }
 
 async function enforceRules() {
+  const hostname = window.location.hostname;
+  
+  // Whitelist: Never block the Oikos dashboard itself
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    document.documentElement.setAttribute('data-oikos-extension', 'active');
+    return;
+  }
+
   const data = await chrome.storage.local.get(['rules_payload', 'daily_usage', 'active_role']);
   const payload = data.rules_payload;
   

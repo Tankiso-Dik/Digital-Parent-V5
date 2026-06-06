@@ -33,13 +33,57 @@ export async function render(container, { user }) {
 
   container.replaceChildren(wrapper);
 
-  const map = L.map(mapEl).setView([-23.8969939, 29.4488468], 15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors'
-  }).addTo(map);
-  
-  // Fix for Leaflet grey tile issue when rendering inside dynamic containers
-  setTimeout(() => map.invalidateSize(), 100);
+  // Dynamically load Leaflet if not present
+  if (typeof window.L === 'undefined') {
+    try {
+      await new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/leaflet.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.src = '/leaflet.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    } catch (e) {
+      console.warn('Failed to dynamically load Leaflet');
+    }
+  }
+
+  let map = null;
+  if (typeof window.L !== 'undefined') {
+    try {
+      map = window.L.map(mapEl).setView([-23.8969939, 29.4488468], 15);
+      const tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      });
+      tiles.on('tileerror', () => {
+        showToast('Offline: Map images cannot be downloaded without internet.', 'danger');
+      });
+      tiles.addTo(map);
+      
+      // Fix for Leaflet grey tile issue when rendering inside dynamic containers
+      const fixMap = () => {
+        if (map) {
+          map.invalidateSize(true);
+        }
+      };
+      setTimeout(fixMap, 100);
+      setTimeout(fixMap, 400);
+      setTimeout(fixMap, 1000);
+      setTimeout(() => {
+        if (map) map.setView([-23.8969939, 29.4488468], 15, { animate: false });
+      }, 1100);
+    } catch (e) {
+      console.error('Leaflet init error:', e);
+    }
+  } else {
+    mapEl.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--text-secondary);text-align:center;padding:20px;">Map library could not be loaded. Please ensure leaflet.js is in the public folder.</div>';
+  }
 
   let familyZones = [];
   const zoneMarkers = [];
@@ -57,7 +101,7 @@ export async function render(container, { user }) {
   }
 
   function renderZones() {
-    zoneMarkers.forEach(m => map.removeLayer(m));
+    if(map) zoneMarkers.forEach(m => { if(map) map.removeLayer(m); });
     zoneMarkers.length = 0;
     
     familyZones.forEach(z => {
@@ -65,10 +109,11 @@ export async function render(container, { user }) {
       if (z.zone_type === 'safe' || z.zone_type === 'park') color = 'green';
       if (z.zone_type === 'danger') color = 'red';
       
-      const circle = L.circle([z.lat, z.lng], { color, radius: z.radius || 250, fillOpacity: 0.2 })
-        .addTo(map)
-        .bindPopup(`<b>${z.name}</b><br>${z.zone_type.toUpperCase()}`);
-      zoneMarkers.push(circle);
+      if (window.L) {
+        const circle = window.L.circle([z.lat, z.lng], { color, radius: z.radius || 250, fillOpacity: 0.2 });
+        circle.addTo(map).bindPopup(`<b>${z.name}</b><br>${z.zone_type.toUpperCase()}`);
+        zoneMarkers.push(circle);
+      }
     });
   }
 
@@ -94,8 +139,16 @@ export async function render(container, { user }) {
 
       const requestLocBtn = sidebar.querySelector('#request-location-btn');
       if (requestLocBtn) {
-        requestLocBtn.onclick = () => {
-          showToast('Location request sent to children', 'success');
+        requestLocBtn.onclick = async () => {
+          requestLocBtn.disabled = true;
+          try {
+             await apiFetch('/location/request', { method: 'POST' });
+             showToast('Location request sent to children', 'success');
+          } catch(e) {
+             showToast('Failed to send request', 'error');
+          } finally {
+             requestLocBtn.disabled = false;
+          }
         };
       }
 
@@ -116,7 +169,7 @@ export async function render(container, { user }) {
         const gotoBtn = document.createElement('button');
         gotoBtn.className = 'btn btn--ghost btn--sm';
         gotoBtn.innerHTML = '🎯';
-        gotoBtn.onclick = () => map.setView([z.lat, z.lng], 17);
+        gotoBtn.onclick = () => map?.setView([z.lat, z.lng], 17);
         actions.appendChild(gotoBtn);
         
         const resizeBtn = document.createElement('button');
@@ -234,7 +287,7 @@ export async function render(container, { user }) {
           let minDistance = Infinity;
 
           familyZones.forEach(z => {
-            const distance = map.distance([lat, lng], [z.lat, z.lng]);
+            const distance = map ? map.distance([lat, lng], [z.lat, z.lng]) : Infinity;
             if (distance < 250 && distance < minDistance) {
               minDistance = distance;
               closestZone = z;
@@ -255,13 +308,16 @@ export async function render(container, { user }) {
             zone_name: closestZone ? closestZone.name : null 
           };
           
-          map.setView([lat, lng], 15);
+          if(map) map.setView([lat, lng], 15);
           if (childMarkers.has('preview')) {
             childMarkers.get('preview').remove();
           }
-          const m = L.marker([lat, lng], { opacity: 0.7 }).addTo(map).bindPopup(`You are here: ${closestZone ? closestZone.name : 'Transit'} (Unsent)`);
-          m.openPopup();
-          childMarkers.set('preview', m);
+          if (window.L) {
+            const m = window.L.marker([lat, lng], { opacity: 0.7 });
+            m.addTo(map).bindPopup(`You are here: ${closestZone ? closestZone.name : 'Transit'} (Unsent)`);
+            m.openPopup();
+            childMarkers.set('preview', m);
+          }
           
           locateBtn.disabled = false;
           locateBtn.innerHTML = '<i data-lucide="crosshair"></i> 1. Find My Location';
@@ -311,7 +367,7 @@ export async function render(container, { user }) {
 
   // Parent clicking map to add zone
   if (isParent) {
-    map.on('click', async (e) => {
+    if(map) map.on('click', async (e) => {
       const name = prompt("Enter a name for this zone (e.g. High School, Uncle's House):");
       if (!name) return;
       
@@ -370,29 +426,34 @@ export async function render(container, { user }) {
               }
               // Clear previous history layer if exists
               if (window.childHistoryLayer) {
-                map.removeLayer(window.childHistoryLayer);
+                if(map) map.removeLayer(window.childHistoryLayer);
               }
-              const group = L.featureGroup().addTo(map);
-              
-              const latlngs = [];
-              history.forEach((h, idx) => {
-                const ll = [h.lat, h.lng];
-                latlngs.push(ll);
-                const isLatest = idx === 0;
-                L.circleMarker(ll, {
-                  color: isLatest ? 'var(--color-primary)' : 'var(--color-secondary)',
-                  radius: isLatest ? 8 : 4,
-                  fillOpacity: isLatest ? 1 : 0.5
-                }).bindPopup(`<b>${loc.display_name}</b><br>${new Date(h.timestamp).toLocaleString()}<br>Zone: ${h.zone_name || 'Unknown'}`)
-                  .addTo(group);
-              });
-              
-              if (latlngs.length > 1) {
-                L.polyline(latlngs, {color: 'var(--color-primary)', dashArray: '5, 5', opacity: 0.5}).addTo(group);
+              if (window.L) {
+                const group = window.L.featureGroup();
+                group.addTo(map);
+                
+                const latlngs = [];
+                history.forEach((h, idx) => {
+                  const ll = [h.lat, h.lng];
+                  latlngs.push(ll);
+                  const isLatest = idx === 0;
+                  const circle = window.L.circleMarker(ll, {
+                    color: isLatest ? 'var(--color-primary)' : 'var(--color-secondary)',
+                    radius: isLatest ? 8 : 4,
+                    fillOpacity: isLatest ? 1 : 0.5
+                  });
+                  circle.bindPopup(`<b>${loc.display_name}</b><br>${new Date(h.timestamp).toLocaleString()}<br>Zone: ${h.zone_name || 'Unknown'}`);
+                  circle.addTo(group);
+                });
+                
+                if (latlngs.length > 1) {
+                  const poly = window.L.polyline(latlngs, {color: 'var(--color-primary)', dashArray: '5, 5', opacity: 0.5});
+                  poly.addTo(group);
+                }
+                
+                if(map) map.fitBounds(group.getBounds(), { padding: [50, 50] });
+                window.childHistoryLayer = group;
               }
-              
-              map.fitBounds(group.getBounds(), { padding: [50, 50] });
-              window.childHistoryLayer = group;
               showToast('Showing recent locations for ' + loc.display_name, 'success');
             } catch (e) {
               showToast('Failed to load history', 'error');
@@ -410,13 +471,15 @@ export async function render(container, { user }) {
           const isUnknown = loc.location_type === 'unknown' || !loc.location_type;
           const displayType = loc.zone_name || (isUnknown ? 'Transit' : loc.location_type);
           
-          const m = L.marker([loc.lat, loc.lng]).addTo(map)
-            .bindPopup(`<b>${loc.display_name || 'Child'}</b><br>Location: ${displayType}<br><small>${new Date(loc.updated_at).toLocaleTimeString()}</small>`);
-          childMarkers.set(loc.user_id, m);
-          
-          if (loc.location_type === 'danger' && isParent) {
-            m.openPopup();
-            showToast(`ALERT: ${loc.display_name} is in a DANGER ZONE!`, 'danger');
+          if (window.L) {
+            const m = window.L.marker([loc.lat, loc.lng]);
+            m.addTo(map).bindPopup(`<b>${loc.display_name || 'Child'}</b><br>Location: ${displayType}<br><small>${new Date(loc.updated_at).toLocaleTimeString()}</small>`);
+            childMarkers.set(loc.user_id, m);
+            
+            if (loc.location_type === 'danger' && isParent) {
+              m.openPopup();
+              showToast(`ALERT: ${loc.display_name} is in a DANGER ZONE!`, 'danger');
+            }
           }
         }
       });

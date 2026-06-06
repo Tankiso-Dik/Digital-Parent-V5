@@ -9,8 +9,6 @@ async function fetchRules() {
     if (!payload.error) {
       const data = await chrome.storage.local.get(['rules_payload']);
       const currentPayload = data.rules_payload;
-      
-      // Update if no local payload, or if version/timestamp changed
       if (!currentPayload || !currentPayload.meta || payload.meta.last_updated !== currentPayload.meta.last_updated) {
         console.log('[Oikos] Rules updated to version:', payload.meta.last_updated);
         await chrome.storage.local.set({ rules_payload: payload });
@@ -19,40 +17,37 @@ async function fetchRules() {
   } catch (e) {}
 }
 
-// Initial fetch & setup alarm
 fetchRules();
 chrome.alarms.create('syncRules', { periodInMinutes: 1 });
 
 async function updateDailyUsage() {
-  const data = await chrome.storage.local.get(['activeDomain', 'startTime', 'daily_usage', 'rules_payload']);
-  if (!data.activeDomain || !data.startTime) return;
+  const data = await chrome.storage.local.get(['activeSession', 'daily_usage', 'rules_payload']);
+  const session = data.activeSession;
+  if (!session || !session.domain || !session.lastTickTime) return;
   
   const now = Date.now();
-  const sessionMinutes = Math.floor((now - data.startTime) / 60000);
-  if (sessionMinutes < 1) return;
+  const deltaMs = now - session.lastTickTime;
+  if (deltaMs <= 0) return;
   
-  // Advance startTime to prevent double counting
-  await chrome.storage.local.set({ startTime: now });
+  // Advance tick time
+  session.lastTickTime = now;
+  await chrome.storage.local.set({ activeSession: session });
   
   const today = new Date().toISOString().split('T')[0];
   let daily = data.daily_usage || { date: today, usage: {} };
+  if (daily.date !== today) daily = { date: today, usage: {} };
   
-  if (daily.date !== today) {
-    daily = { date: today, usage: {} };
-  }
-  
-  const domain = data.activeDomain;
-  daily.usage[domain] = (daily.usage[domain] || 0) + sessionMinutes;
+  const deltaMins = deltaMs / 60000;
+  const domain = session.domain;
+  daily.usage[domain] = (daily.usage[domain] || 0) + deltaMins;
   
   let category = null;
   if (data.rules_payload && data.rules_payload.category_map && data.rules_payload.category_map[domain]) {
     category = data.rules_payload.category_map[domain];
-    daily.usage['cat_' + category] = (daily.usage['cat_' + category] || 0) + sessionMinutes;
+    daily.usage['cat_' + category] = (daily.usage['cat_' + category] || 0) + deltaMins;
   }
   
   await chrome.storage.local.set({ daily_usage: daily });
-  
-  // Check limits
   checkLimits(domain, category, daily.usage, data.rules_payload);
 }
 
@@ -63,7 +58,6 @@ function checkLimits(domain, category, usage, payload) {
   if (payload.rules.domains && payload.rules.domains[domain] && payload.rules.domains[domain].action === 'limit') {
     if (usage[domain] >= payload.rules.domains[domain].limit_mins) block = true;
   }
-  
   if (category && payload.rules.categories && payload.rules.categories[category] && payload.rules.categories[category].action === 'limit') {
     if (usage['cat_' + category] >= payload.rules.categories[category].limit_mins) block = true;
   }
@@ -71,10 +65,7 @@ function checkLimits(domain, category, usage, payload) {
   if (block) {
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
       if (tabs.length > 0) {
-        chrome.scripting.executeScript({
-          target: {tabId: tabs[0].id},
-          files: ['blocker.js']
-        }).catch(e => {});
+        chrome.scripting.executeScript({ target: {tabId: tabs[0].id}, files: ['blocker.js'] }).catch(e => {});
       }
     });
   }
@@ -84,6 +75,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'syncRules') {
     fetchRules();
     updateDailyUsage();
+    chrome.storage.local.get(['failed_logs']).then(data => {
+      if (data.failed_logs && data.failed_logs.length > 0) {
+        sendLog(null, null, null, data.failed_logs);
+      }
+    });
   }
 });
 
@@ -91,7 +87,6 @@ let globalActiveRole = null;
 let lastRoleCheckTime = 0;
 
 async function getActiveRole() {
-  // Only fetch from backend if our cached role is older than 30 seconds
   if (Date.now() - lastRoleCheckTime > 30000) {
     try {
       const res = await fetch('http://localhost:3000/api/v1/app-usage/active-role', { credentials: 'include' });
@@ -100,88 +95,147 @@ async function getActiveRole() {
       await chrome.storage.local.set({ active_role: globalActiveRole });
       lastRoleCheckTime = Date.now();
     } catch (err) {
-      globalActiveRole = null;
-      await chrome.storage.local.set({ active_role: null });
+      // Safe Role Fallback: Default to cached role or closed
+      const cached = await chrome.storage.local.get(['active_role']);
+      globalActiveRole = cached.active_role || 'child'; 
     }
   }
-  return globalActiveRole;
+  return globalActiveRole || 'child';
 }
 
-async function sendLog(domain, startTime, endTime) {
-  if (!domain || !startTime || !endTime) return;
-  const duration = Math.floor((endTime - startTime) / 1000); // seconds
-  if (duration <= 0) return;
-
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+async function sendLog(domain, startTime, endTime, failedLogs = []) {
+  let logsToSend = [...failedLogs];
+  if (domain && startTime && endTime) {
+    const duration = Math.floor((endTime - startTime) / 1000);
+    if (duration > 0) {
+      logsToSend.push({
         app_identifier: domain,
         start_time: new Date(startTime).toISOString(),
         end_time: new Date(endTime).toISOString(),
         duration
-      })
-    });
-    const data = await res.json();
-    if (data.ignored) {
-      console.log('Ignored: active role not child');
-    } else {
-      console.log('Logged usage:', domain, duration, 'sec');
+      });
     }
-  } catch (err) {
-    console.error('Failed to log usage:', err);
+  }
+
+  if (logsToSend.length === 0) return;
+  const newFailedLogs = [];
+
+  for (const log of logsToSend) {
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log)
+      });
+      const data = await res.json();
+      if (!data.ignored) console.log('Logged usage:', log.app_identifier, log.duration, 'sec');
+    } catch (err) {
+      console.error('Failed to log usage, queueing:', err);
+      newFailedLogs.push(log);
+    }
+  }
+
+  if (newFailedLogs.length > 0) {
+    await chrome.storage.local.set({ failed_logs: newFailedLogs });
+  } else {
+    await chrome.storage.local.remove(['failed_logs']);
   }
 }
 
-// Finalizes the current session, sends it to backend, and clears storage.
-async function finalizeSession(endTime) {
-  const data = await chrome.storage.local.get(['activeDomain', 'startTime']);
-  if (data.activeDomain && data.startTime) {
-    await sendLog(data.activeDomain, data.startTime, endTime);
-  }
-  await chrome.storage.local.remove(['activeDomain', 'startTime']);
-}
+const finalizedSessionsSet = new Set();
+let eventQueue = Promise.resolve();
 
-// Starts a new session in storage.
-async function startSession(domain, startTime) {
-  await chrome.storage.local.set({ activeDomain: domain, startTime: startTime });
-}
-
-// Handles switching to a new tab/domain.
-async function handleTabChange(tab) {
-  const role = await getActiveRole();
-  if (role !== 'child') {
-    await chrome.storage.local.remove(['activeDomain', 'startTime']);
-    return;
-  }
-
-  // If the new tab is invalid, finalize current session and stop tracking.
-  if (!tab || !tab.url || tab.url.startsWith('chrome://')) {
-    await finalizeSession(Date.now());
-    return;
-  }
-
-  try {
-    const url = new URL(tab.url);
-    const domain = url.hostname;
-    const now = Date.now();
-
-    const data = await chrome.storage.local.get(['activeDomain']);
+// Finalizes the current session, strictly deduplicated.
+function finalizeSession(endTime) {
+  eventQueue = eventQueue.then(async () => {
+    const data = await chrome.storage.local.get(['activeSession', 'failed_logs']);
+    const session = data.activeSession;
     
-    // If domain changed, finalize old and start new.
-    if (data.activeDomain !== domain) {
-      await finalizeSession(now);
-      await startSession(domain, now);
+    if (!session || !session.sessionId) return;
+    if (finalizedSessionsSet.has(session.sessionId)) return; // Idempotency lock
+    
+    finalizedSessionsSet.add(session.sessionId);
+    if (finalizedSessionsSet.size > 100) finalizedSessionsSet.delete(finalizedSessionsSet.keys().next().value);
+
+    const durationMs = endTime - session.sessionStart;
+    if (durationMs > 0 && durationMs < 12 * 60 * 60 * 1000) {
+      await sendLog(session.domain, session.sessionStart, endTime, data.failed_logs || []);
     }
-  } catch (e) {
-    // URL parsing failed, likely an empty/invalid tab. Finalize tracking.
-    await finalizeSession(Date.now());
-  }
+    await chrome.storage.local.remove(['activeSession']);
+  }).catch(() => {});
 }
 
-// Event Listeners
+// Starts a new session atomically.
+async function startSession(domain, startTime) {
+  const sessionId = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+  const activeSession = {
+    sessionId,
+    domain,
+    sessionStart: startTime,
+    lastTickTime: startTime,
+    isBlocked: false
+  };
+  await chrome.storage.local.set({ activeSession });
+}
+
+// Handles switching to a new tab/domain via queue.
+function handleTabChange(tab) {
+  eventQueue = eventQueue.then(async () => {
+    const role = await getActiveRole();
+    if (role !== 'child') {
+      await chrome.storage.local.remove(['activeSession']);
+      return;
+    }
+
+    if (!tab || !tab.url || tab.url.startsWith('chrome://')) {
+      const data = await chrome.storage.local.get(['activeSession']);
+      if (data.activeSession) {
+        // inline finalize to maintain queue order context
+        const session = data.activeSession;
+        if (!finalizedSessionsSet.has(session.sessionId)) {
+           finalizedSessionsSet.add(session.sessionId);
+           const durationMs = Date.now() - session.sessionStart;
+           if (durationMs > 0 && durationMs < 12 * 60 * 60 * 1000) {
+             await sendLog(session.domain, session.sessionStart, Date.now(), (await chrome.storage.local.get('failed_logs')).failed_logs || []);
+           }
+           await chrome.storage.local.remove(['activeSession']);
+        }
+      }
+      return;
+    }
+
+    try {
+      const url = new URL(tab.url);
+      const domain = url.hostname;
+      const now = Date.now();
+
+      const data = await chrome.storage.local.get(['activeSession']);
+      const session = data.activeSession;
+      
+      if (!session || session.domain !== domain) {
+        if (session && !finalizedSessionsSet.has(session.sessionId)) {
+           finalizedSessionsSet.add(session.sessionId);
+           const durationMs = now - session.sessionStart;
+           if (durationMs > 0 && durationMs < 12 * 60 * 60 * 1000) {
+             await sendLog(session.domain, session.sessionStart, now, (await chrome.storage.local.get('failed_logs')).failed_logs || []);
+           }
+           await chrome.storage.local.remove(['activeSession']);
+        }
+        await startSession(domain, now);
+      }
+    } catch (e) {
+       const data = await chrome.storage.local.get(['activeSession']);
+       if (data.activeSession) {
+           const session = data.activeSession;
+           if (!finalizedSessionsSet.has(session.sessionId)) {
+              finalizedSessionsSet.add(session.sessionId);
+              await chrome.storage.local.remove(['activeSession']);
+           }
+       }
+    }
+  }).catch(() => {});
+}
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   try {
@@ -196,44 +250,28 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
-  if (removeInfo.isWindowClosing) return; // Handled by windows.onRemoved
-  // If the tab closed was the active one, we should finalize. 
-  // However, onActivated usually fires right after or before.
-  // To be safe, we query the new active tab.
-  setTimeout(async () => {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs.length > 0) {
-        handleTabChange(tabs[0]);
-      } else {
-        finalizeSession(Date.now());
-      }
-    } catch(e) {}
-  }, 100);
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  if (removeInfo.isWindowClosing) return; 
+  finalizeSession(Date.now());
 });
 
-chrome.windows.onFocusChanged.addListener(async (windowId) => {
+chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // Chrome lost focus
-    await finalizeSession(Date.now());
+    finalizeSession(Date.now());
   } else {
-    // Chrome gained focus
-    try {
-      const tabs = await chrome.tabs.query({ active: true, windowId: windowId });
+    chrome.tabs.query({ active: true, windowId: windowId }).then(tabs => {
       if (tabs.length > 0) handleTabChange(tabs[0]);
-    } catch(e) {}
+    }).catch(()=>{});
   }
 });
 
-chrome.idle.onStateChanged.addListener(async (newState) => {
+chrome.idle.onStateChanged.addListener((newState) => {
   if (newState === 'idle' || newState === 'locked') {
-    await finalizeSession(Date.now());
+    finalizeSession(Date.now());
   } else if (newState === 'active') {
-    try {
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
       if (tabs.length > 0) handleTabChange(tabs[0]);
-    } catch(e) {}
+    }).catch(()=>{});
   }
 });
 

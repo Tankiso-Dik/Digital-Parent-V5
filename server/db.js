@@ -1948,6 +1948,19 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 54,
+    description: 'Add mandatory location requests table',
+    up: `
+      CREATE TABLE IF NOT EXISTS location_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        requested_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_location_requests_user ON location_requests(user_id);
+    `,
+  },
 ];
 
 /**
