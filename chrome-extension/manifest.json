@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Oikos Digital Parent Monitor",
+  "version": "1.0",
+  "description": "Tracks web usage and enforces parental controls for Oikos.",
+  "permissions": [
+    "tabs",
+    "webNavigation",
+    "storage",
+    "alarms",
+    "idle"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Oikos Parent Monitor"
+  }
+}

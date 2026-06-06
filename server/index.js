@@ -42,6 +42,7 @@ import reportsRouter from './routes/reports.js';
 import housekeepingRouter from './routes/housekeeping.js';
 import modulesRouter from './routes/modules.js';
 import schoolRouter from './routes/school.js';
+import appUsageRouter from './routes/app_usage.js';
 
 const log     = createLogger('Server');
 const logSync = createLogger('Sync');
@@ -273,6 +274,7 @@ app.use('/api/v1/reports', reportsRouter);
 app.use('/api/v1/housekeeping', housekeepingRouter);
 app.use('/api/v1/modules', modulesRouter);
 app.use('/api/v1/school', schoolRouter);
+app.use('/api/v1/app-usage', appUsageRouter);
 
 // --------------------------------------------------------
 // Health-Check (für Docker)
