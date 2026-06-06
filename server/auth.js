@@ -371,6 +371,11 @@ function requireAuth(req, res, next) {
     req.authUserId = req.session.userId;
     req.authRole = req.session.role;
     req.authFamilyRole = req.session.family_role;
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     return next();
   }
   res.status(401).json({ error: 'Not authenticated.', code: 401 });
@@ -504,6 +509,10 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     try {
       await setupAuthSession(req, res, user);
+      
+      // Update global active user state for Chrome Extension polling
+      db.get().prepare('UPDATE active_session_state SET user_id = ?, updated_at = strftime("%Y-%m-%dT%H:%M:%SZ", "now") WHERE id = 1').run(user.id);
+
       res.json({
         user: {
           id:           user.id,
@@ -535,11 +544,16 @@ router.post('/logout', requireAuth, csrfMiddleware, (req, res) => {
   if (req.authMethod === 'api_token') {
     return res.json({ ok: true });
   }
+  const userId = req.session.userId;
   req.session.destroy((err) => {
     if (err) {
-      log.error('Logout error:', err);
+      log.error('Logout error', err);
       return res.status(500).json({ error: 'Logout failed.', code: 500 });
     }
+    
+    // Clear global active user state if the person logging out was the globally active one
+    db.get().prepare('UPDATE active_session_state SET user_id = NULL WHERE id = 1 AND user_id = ?').run(userId || null);
+    
     res.clearCookie('oikos.sid');
     res.json({ ok: true });
   });

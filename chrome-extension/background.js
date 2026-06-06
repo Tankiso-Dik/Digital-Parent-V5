@@ -39,7 +39,30 @@ async function sendLog(domain, startTime, endTime) {
   }
 }
 
+let globalActiveRole = null;
+
+async function checkActiveRole() {
+  try {
+    const res = await fetch('http://localhost:4000/api/v1/app-usage/active-role', { credentials: 'include' });
+    const data = await res.json();
+    globalActiveRole = data.active_role;
+  } catch (err) {
+    globalActiveRole = null;
+  }
+}
+
+// Poll every 30 seconds
+setInterval(checkActiveRole, 30000);
+checkActiveRole();
+
 function handleTabChange(tab) {
+  if (globalActiveRole !== 'child') {
+    if (activeTabDomain) {
+      activeTabDomain = null; // silently drop tracking
+    }
+    return;
+  }
+
   if (!tab || !tab.url || tab.url.startsWith('chrome://')) {
     if (activeTabDomain) {
       sendLog(activeTabDomain, activeTabStartTime, Date.now());

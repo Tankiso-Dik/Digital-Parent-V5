@@ -16,20 +16,42 @@ router.get('/categories', (req, res) => {
   }
 });
 
+// GET /api/v1/app-usage/active-role
+router.get('/active-role', (req, res) => {
+  try {
+    const row = db.get().prepare(`
+      SELECT users.family_role 
+      FROM active_session_state 
+      JOIN users ON active_session_state.user_id = users.id 
+      WHERE active_session_state.id = 1
+    `).get();
+    res.json({ active_role: row ? row.family_role : null });
+  } catch (err) {
+    log.error('GET /app-usage/active-role error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // POST /api/v1/app-usage/logs (Called by Extension)
 router.post('/logs', (req, res) => {
   try {
-    // Only track if user is child (family_role = 'child')
-    const user = db.get().prepare('SELECT family_role FROM users WHERE id = ?').get(req.authUserId || req.session?.userId);
+    // Only track if globally active user is a child
+    const user = db.get().prepare(`
+      SELECT users.id, users.family_role 
+      FROM active_session_state 
+      JOIN users ON active_session_state.user_id = users.id 
+      WHERE active_session_state.id = 1
+    `).get();
+    
     if (!user || user.family_role !== 'child') {
-      return res.json({ ok: true, ignored: true, message: 'Not a child role' });
+      return res.json({ ok: true, ignored: true, message: 'Active role is not a child' });
     }
 
     const { app_identifier, app_name, category_id, start_time, end_time, duration } = req.body;
     db.get().prepare(`
       INSERT INTO app_usage_logs (user_id, app_identifier, app_name, category_id, start_time, end_time, duration)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(req.authUserId || req.session?.userId, app_identifier, app_name, category_id || null, start_time, end_time || null, duration || 0);
+    `).run(user.id, app_identifier, app_name, category_id || null, start_time, end_time || null, duration || 0);
 
     res.json({ ok: true });
   } catch (err) {
