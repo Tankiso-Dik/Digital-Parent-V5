@@ -17,6 +17,7 @@ async function sendLog(domain, startTime, endTime) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         app_identifier: domain,

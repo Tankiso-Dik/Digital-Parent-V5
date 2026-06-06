@@ -253,6 +253,7 @@ app.use('/api/v1', (req, res, next) => {
     return res.status(403).json({ error: 'This account can only access Split expenses.', code: 403 });
   }
 });
+app.use('/api/v1/app-usage', appUsageRouter);
 app.use('/api/v1', csrfMiddleware);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/tasks', tasksRouter);
@@ -274,7 +275,6 @@ app.use('/api/v1/reports', reportsRouter);
 app.use('/api/v1/housekeeping', housekeepingRouter);
 app.use('/api/v1/modules', modulesRouter);
 app.use('/api/v1/school', schoolRouter);
-app.use('/api/v1/app-usage', appUsageRouter);
 
 // --------------------------------------------------------
 // Health-Check (für Docker)
