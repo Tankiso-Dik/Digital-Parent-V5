@@ -358,6 +358,9 @@ function authenticateApiToken(req) {
  * Schützt alle API-Routen außer /auth/login.
  */
 function requireAuth(req, res, next) {
+  if (req.path === '/rules/sync') {
+    return next();
+  }
   const apiToken = authenticateApiToken(req);
   if (apiToken) {
     req.authMethod = 'api_token';

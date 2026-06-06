@@ -41,7 +41,12 @@ router.get('/sync', (req, res) => {
         if (r.limit_minutes) categories[r.value].limit_mins = r.limit_minutes;
         
         // Populate category_map ONLY for categories that have rules
-        const catDomains = database.prepare("SELECT domain FROM app_categories WHERE category = ?").all(r.value);
+        const catDomains = database.prepare(`
+          SELECT DISTINCT app_identifier as domain 
+          FROM app_usage_logs l
+          JOIN app_categories c ON l.category_id = c.id
+          WHERE c.name = ? AND l.app_identifier IS NOT NULL
+        `).all(r.value);
         for (const cd of catDomains) {
           category_map[cd.domain] = r.value;
         }

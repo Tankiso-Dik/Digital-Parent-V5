@@ -91,19 +91,32 @@ function shouldBlock(currentDomain, payload, usageObj) {
 async function enforceRules() {
   const hostname = window.location.hostname;
   
-  // Whitelist: Never block the Oikos dashboard itself
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     document.documentElement.setAttribute('data-oikos-extension', 'active');
+    
+    if (!window.oikosBridgeAdded) {
+      window.oikosBridgeAdded = true;
+      window.addEventListener('message', (event) => {
+        if (event.source !== window || !event.data) return;
+        if (event.data.type === 'OIKOS_SYNC_NOW') {
+          chrome.runtime.sendMessage({ action: 'FORCE_SYNC' }, (response) => {
+            window.postMessage({ type: 'OIKOS_SYNC_ACK', success: response && response.success }, '*');
+          });
+        }
+      });
+    }
     return;
   }
 
-  const data = await chrome.storage.local.get(['rules_payload', 'daily_usage', 'active_role']);
-  const payload = data.rules_payload;
+  const roleResponse = await chrome.runtime.sendMessage({ action: 'GET_ACTIVE_ROLE' }).catch(e => null);
+  const active_role = roleResponse ? roleResponse.role : 'child';
   
-  // Only block if we are specifically logged in as a child
-  if (data.active_role !== 'child') {
+  if (active_role !== 'child') {
     return;
   }
+  
+  const data = await chrome.storage.local.get(['rules_payload', 'daily_usage']);
+  const payload = data.rules_payload;
   
   const blockData = shouldBlock(window.location.hostname, payload, data.daily_usage);
   if (blockData) {

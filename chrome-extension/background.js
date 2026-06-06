@@ -4,17 +4,23 @@ const SYNC_URL = 'http://localhost:3000/api/v1/rules/sync';
 async function fetchRules() {
   try {
     const res = await fetch(SYNC_URL, { credentials: 'include' });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('Network error or non-200 OK');
     const payload = await res.json();
     if (!payload.error) {
       const data = await chrome.storage.local.get(['rules_payload']);
       const currentPayload = data.rules_payload;
       if (!currentPayload || !currentPayload.meta || payload.meta.last_updated !== currentPayload.meta.last_updated) {
         console.log('[Oikos] Rules updated to version:', payload.meta.last_updated);
-        await chrome.storage.local.set({ rules_payload: payload });
+        await chrome.storage.local.set({ rules_payload: payload, extension_connected: true });
       }
+      return { success: true };
     }
-  } catch (e) {}
+    return { success: false, error: payload.error };
+  } catch (e) {
+    console.error('Failed to fetch rules:', e);
+    chrome.storage.local.set({ extension_connected: false });
+    return { success: false, error: e.message };
+  }
 }
 
 fetchRules();
@@ -86,22 +92,34 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 let globalActiveRole = null;
 let lastRoleCheckTime = 0;
 
-async function getActiveRole() {
-  if (Date.now() - lastRoleCheckTime > 30000) {
+async function getActiveRole(force = false) {
+  if (force || Date.now() - lastRoleCheckTime > 5000) {
     try {
       const res = await fetch('http://localhost:3000/api/v1/app-usage/active-role', { credentials: 'include' });
+      if (!res.ok) throw new Error('Role fetch failed');
       const data = await res.json();
       globalActiveRole = data.active_role;
-      await chrome.storage.local.set({ active_role: globalActiveRole });
+      await chrome.storage.local.set({ active_role: globalActiveRole, extension_connected: true });
       lastRoleCheckTime = Date.now();
     } catch (err) {
-      // Safe Role Fallback: Default to cached role or closed
+      console.error('Failed to fetch role:', err);
+      chrome.storage.local.set({ extension_connected: false });
       const cached = await chrome.storage.local.get(['active_role']);
       globalActiveRole = cached.active_role || 'child'; 
     }
   }
   return globalActiveRole || 'child';
 }
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'FORCE_SYNC') {
+    fetchRules().then(result => sendResponse(result));
+    return true;
+  } else if (request.action === 'GET_ACTIVE_ROLE') {
+    getActiveRole().then(role => sendResponse({ role }));
+    return true;
+  }
+});
 
 async function sendLog(domain, startTime, endTime, failedLogs = []) {
   let logsToSend = [...failedLogs];

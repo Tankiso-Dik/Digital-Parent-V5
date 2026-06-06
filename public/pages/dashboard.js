@@ -246,12 +246,25 @@ async function renderScreenControlDashboard(grid, user) {
     try {
       const res = await fetch('/api/v1/rules/sync');
       if (res.ok) {
+        window.postMessage({ type: 'OIKOS_SYNC_NOW' }, '*');
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Extension not responding. Is it connected?')), 3000);
+          window.addEventListener('message', function onAck(event) {
+            if (event.data?.type === 'OIKOS_SYNC_ACK') {
+              clearTimeout(timeout);
+              window.removeEventListener('message', onAck);
+              if (event.data.success) resolve();
+              else reject(new Error('Extension internal sync failed.'));
+            }
+          });
+        });
         showToast('Rules compiled and synced successfully!', 'success');
       } else {
-        throw new Error('Sync failed');
+        throw new Error('Server sync endpoint failed.');
       }
     } catch(err) {
-      showToast('Error syncing rules. Is the extension connected?', 'danger');
+      console.error(err);
+      showToast('Error: ' + err.message, 'danger');
     }
     btn.innerHTML = oldText;
     btn.disabled = false;
