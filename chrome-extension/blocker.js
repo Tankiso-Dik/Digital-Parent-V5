@@ -11,6 +11,11 @@ function shouldBlock(currentDomain, payload, usageObj) {
   const usage = usageObj && usageObj.usage ? usageObj.usage : {};
   if (!payload || !payload.rules) return null; // Fallback safety: ALLOW
 
+  // 0. Safety override: Never block the local dashboard
+  if (currentDomain === 'localhost' || currentDomain === '127.0.0.1') {
+    return null;
+  }
+
   // 1. Curfew Check (Highest Priority)
   if (payload.curfews && payload.curfews.length > 0) {
     const now = new Date();
@@ -31,15 +36,19 @@ function shouldBlock(currentDomain, payload, usageObj) {
     }
   }
 
-  // 2. Domain Exact Match
-  if (payload.rules.domains && payload.rules.domains[currentDomain]) {
-    const rule = payload.rules.domains[currentDomain];
-    if (rule.action === 'allow') return null; // whitelist bypass
-    if (rule.action === 'block' || (rule.action === 'limit' && usage[currentDomain] >= rule.limit_mins)) {
-      return {
-        title: 'Website Blocked',
-        message: payload.messages?.domain_default || 'This specific website has been blocked.'
-      };
+  // 2. Domain Match (Allows subdomains like www.facebook.com for rule facebook.com)
+  if (payload.rules.domains) {
+    for (const d of Object.keys(payload.rules.domains)) {
+      if (currentDomain === d || currentDomain.endsWith('.' + d)) {
+        const rule = payload.rules.domains[d];
+        if (rule.action === 'allow') return null; // whitelist bypass
+        if (rule.action === 'block' || (rule.action === 'limit' && usage[d] >= rule.limit_mins)) {
+          return {
+            title: 'Website Blocked',
+            message: payload.messages?.domain_default || 'This specific website has been blocked.'
+          };
+        }
+      }
     }
   }
 
@@ -50,7 +59,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
       const regex = new RegExp(regexStr);
       if (regex.test(currentDomain)) {
         if (w.action === 'allow') return null;
-        if (w.action === 'block' || (w.action === 'limit' && usage[currentDomain] >= w.limit_mins)) {
+        if (w.action === 'block' || (w.action === 'limit' && usage[w.pattern] >= w.limit_mins)) {
           return {
             title: 'Website Blocked',
             message: payload.messages?.domain_default || 'This specific website has been blocked.'
