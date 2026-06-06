@@ -9,6 +9,9 @@ const router = express.Router();
  */
 router.get('/sync', (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const database = db.get();
     
     // We only need rules for the current family, but for simplicity we assume 

@@ -3,7 +3,7 @@ const SYNC_URL = 'http://localhost:3000/api/v1/rules/sync';
 
 async function fetchRules() {
   try {
-    const res = await fetch(SYNC_URL, { credentials: 'include' });
+    const res = await fetch(SYNC_URL, { credentials: 'include', cache: 'no-store' });
     if (!res.ok) throw new Error('Network error or non-200 OK');
     const payload = await res.json();
     if (!payload.error) {
@@ -68,6 +68,21 @@ function checkLimits(domain, category, usage, payload) {
     if (usage['cat_' + category] >= payload.rules.categories[category].limit_mins) block = true;
   }
   
+  if (payload.curfews && payload.curfews.length > 0) {
+    const now = new Date();
+    const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+    const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    for (const c of payload.curfews) {
+      if (c.days.includes(currentDay) && c.strict_mode) {
+        if (c.start_time < c.end_time) {
+          if (currentTimeStr >= c.start_time && currentTimeStr < c.end_time) block = true;
+        } else {
+          if (currentTimeStr >= c.start_time || currentTimeStr < c.end_time) block = true;
+        }
+      }
+    }
+  }
+
   if (block) {
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
       if (tabs.length > 0) {

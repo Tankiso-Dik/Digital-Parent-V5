@@ -24,13 +24,17 @@ function shouldBlock(currentDomain, payload, usageObj) {
     
     for (const c of payload.curfews) {
       if (c.days.includes(currentDay)) {
-        if (currentTimeStr >= c.start_time || currentTimeStr < c.end_time) {
-          if (c.strict_mode) {
-            return {
-              title: 'Curfew Active',
-              message: c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.'
-            };
-          }
+        let isCurfewActive = false;
+        if (c.start_time < c.end_time) {
+          isCurfewActive = (currentTimeStr >= c.start_time && currentTimeStr < c.end_time);
+        } else {
+          isCurfewActive = (currentTimeStr >= c.start_time || currentTimeStr < c.end_time);
+        }
+        if (isCurfewActive && c.strict_mode) {
+          return {
+            title: 'Curfew Active',
+            message: c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.'
+          };
         }
       }
     }
@@ -172,5 +176,28 @@ function showOverlayBlocker(title, message) {
 }
 
 enforceRules();
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.rules_payload) {
+    const payload = changes.rules_payload.newValue;
+    chrome.storage.local.get(['daily_usage', 'active_role'], (data) => {
+      const active_role = data.active_role || 'child';
+      if (active_role !== 'child') return;
+      
+      const hostname = window.location.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') return;
+
+      const blockData = shouldBlock(hostname, payload, data.daily_usage);
+      const overlay = document.getElementById('oikos-block-overlay');
+      
+      if (!blockData && overlay) {
+        overlay.remove();
+        document.documentElement.style.overflow = '';
+      } else if (blockData && !overlay) {
+        showOverlayBlocker(blockData.title, blockData.message);
+      }
+    });
+  }
+});
 
 })();
