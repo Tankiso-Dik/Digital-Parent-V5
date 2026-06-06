@@ -89,8 +89,13 @@ function shouldBlock(currentDomain, payload, usageObj) {
 }
 
 async function enforceRules() {
-  const data = await chrome.storage.local.get(['rules_payload', 'daily_usage']);
+  const data = await chrome.storage.local.get(['rules_payload', 'daily_usage', 'active_role']);
   const payload = data.rules_payload;
+  
+  // Only block if we are specifically logged in as a child
+  if (data.active_role !== 'child') {
+    return;
+  }
   
   const blockData = shouldBlock(window.location.hostname, payload, data.daily_usage);
   if (blockData) {

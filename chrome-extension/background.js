@@ -97,9 +97,11 @@ async function getActiveRole() {
       const res = await fetch('http://localhost:3000/api/v1/app-usage/active-role', { credentials: 'include' });
       const data = await res.json();
       globalActiveRole = data.active_role;
+      await chrome.storage.local.set({ active_role: globalActiveRole });
       lastRoleCheckTime = Date.now();
     } catch (err) {
       globalActiveRole = null;
+      await chrome.storage.local.set({ active_role: null });
     }
   }
   return globalActiveRole;
