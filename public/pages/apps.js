@@ -21,7 +21,7 @@ export async function render(container, { user }) {
   header.innerHTML = `
     <div>
       <h1 style="font-size: 28px; font-weight: 800; margin: 0; background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); -webkit-background-clip: text; color: transparent;">App Usage Analytics</h1>
-      <p style="color: var(--text-secondary); margin: 4px 0 0 0;">${isParent ? 'Monitor your child\\'s screen time' : 'View your daily activity'}</p>
+      <p style="color: var(--text-secondary); margin: 4px 0 0 0;">${isParent ? "Monitor your child's screen time" : "View your daily activity"}</p>
     </div>
   `;
   wrapper.appendChild(header);
