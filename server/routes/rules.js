@@ -72,7 +72,7 @@ router.get('/sync', (req, res) => {
       domain_default: "This specific website has been blocked."
     };
 
-    const msgRows = database.prepare("SELECT type, message FROM block_messages WHERE reason_type IN ('curfew', 'category', 'domain')").all();
+    const msgRows = database.prepare("SELECT reason_type, message FROM block_messages WHERE reason_type IN ('curfew', 'category', 'domain')").all();
     for (const m of msgRows) {
       if (m.reason_type === 'curfew') messages.curfew_default = m.message;
       if (m.reason_type === 'category') messages.category_default = m.message;
