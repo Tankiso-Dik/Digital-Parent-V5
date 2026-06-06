@@ -511,7 +511,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       await setupAuthSession(req, res, user);
       
       // Update global active user state for Chrome Extension polling
-      db.get().prepare('UPDATE active_session_state SET user_id = ?, updated_at = strftime("%Y-%m-%dT%H:%M:%SZ", "now") WHERE id = 1').run(user.id);
+      db.get().prepare("UPDATE active_session_state SET user_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = 1").run(user.id);
 
       res.json({
         user: {
