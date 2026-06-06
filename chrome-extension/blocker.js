@@ -6,7 +6,8 @@
  * @param {object} payload 
  * @returns {object|null} The block message and title if blocked, or null if allowed.
  */
-function shouldBlock(currentDomain, payload) {
+function shouldBlock(currentDomain, payload, usageObj) {
+  const usage = usageObj && usageObj.usage ? usageObj.usage : {};
   if (!payload || !payload.rules) return null; // Fallback safety: ALLOW
 
   // 1. Curfew Check (Highest Priority)
@@ -33,7 +34,7 @@ function shouldBlock(currentDomain, payload) {
   if (payload.rules.domains && payload.rules.domains[currentDomain]) {
     const rule = payload.rules.domains[currentDomain];
     if (rule.action === 'allow') return null; // whitelist bypass
-    if (rule.action === 'block') {
+    if (rule.action === 'block' || (rule.action === 'limit' && usage[currentDomain] >= rule.limit_mins)) {
       return {
         title: 'Website Blocked',
         message: payload.messages?.domain_default || 'This specific website has been blocked.'
@@ -48,7 +49,7 @@ function shouldBlock(currentDomain, payload) {
       const regex = new RegExp(regexStr);
       if (regex.test(currentDomain)) {
         if (w.action === 'allow') return null;
-        if (w.action === 'block') {
+        if (w.action === 'block' || (w.action === 'limit' && usage[currentDomain] >= w.limit_mins)) {
           return {
             title: 'Website Blocked',
             message: payload.messages?.domain_default || 'This specific website has been blocked.'
@@ -64,7 +65,7 @@ function shouldBlock(currentDomain, payload) {
     if (payload.rules.categories && payload.rules.categories[category]) {
       const rule = payload.rules.categories[category];
       if (rule.action === 'allow') return null;
-      if (rule.action === 'block') {
+      if (rule.action === 'block' || (rule.action === 'limit' && usage[currentDomain] >= rule.limit_mins)) {
         return {
           title: 'Category Restricted',
           message: payload.messages?.category_default || 'This app category is restricted right now.'
@@ -78,10 +79,10 @@ function shouldBlock(currentDomain, payload) {
 }
 
 async function enforceRules() {
-  const data = await chrome.storage.local.get(['rules_payload']);
+  const data = await chrome.storage.local.get(['rules_payload', 'daily_usage']);
   const payload = data.rules_payload;
   
-  const blockData = shouldBlock(window.location.hostname, payload);
+  const blockData = shouldBlock(window.location.hostname, payload, data.daily_usage);
   if (blockData) {
     showOverlayBlocker(blockData.title, blockData.message);
   }

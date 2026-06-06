@@ -22,8 +22,69 @@ async function fetchRules() {
 // Initial fetch & setup alarm
 fetchRules();
 chrome.alarms.create('syncRules', { periodInMinutes: 1 });
+
+async function updateDailyUsage() {
+  const data = await chrome.storage.local.get(['activeDomain', 'startTime', 'daily_usage', 'rules_payload']);
+  if (!data.activeDomain || !data.startTime) return;
+  
+  const now = Date.now();
+  const sessionMinutes = Math.floor((now - data.startTime) / 60000);
+  if (sessionMinutes < 1) return;
+  
+  // Advance startTime to prevent double counting
+  await chrome.storage.local.set({ startTime: now });
+  
+  const today = new Date().toISOString().split('T')[0];
+  let daily = data.daily_usage || { date: today, usage: {} };
+  
+  if (daily.date !== today) {
+    daily = { date: today, usage: {} };
+  }
+  
+  const domain = data.activeDomain;
+  daily.usage[domain] = (daily.usage[domain] || 0) + sessionMinutes;
+  
+  let category = null;
+  if (data.rules_payload && data.rules_payload.category_map && data.rules_payload.category_map[domain]) {
+    category = data.rules_payload.category_map[domain];
+    daily.usage['cat_' + category] = (daily.usage['cat_' + category] || 0) + sessionMinutes;
+  }
+  
+  await chrome.storage.local.set({ daily_usage: daily });
+  
+  // Check limits
+  checkLimits(domain, category, daily.usage, data.rules_payload);
+}
+
+function checkLimits(domain, category, usage, payload) {
+  if (!payload || !payload.rules) return;
+  let block = false;
+  
+  if (payload.rules.domains && payload.rules.domains[domain] && payload.rules.domains[domain].action === 'limit') {
+    if (usage[domain] >= payload.rules.domains[domain].limit_mins) block = true;
+  }
+  
+  if (category && payload.rules.categories && payload.rules.categories[category] && payload.rules.categories[category].action === 'limit') {
+    if (usage['cat_' + category] >= payload.rules.categories[category].limit_mins) block = true;
+  }
+  
+  if (block) {
+    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+      if (tabs.length > 0) {
+        chrome.scripting.executeScript({
+          target: {tabId: tabs[0].id},
+          files: ['blocker.js']
+        }).catch(e => {});
+      }
+    });
+  }
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'syncRules') fetchRules();
+  if (alarm.name === 'syncRules') {
+    fetchRules();
+    updateDailyUsage();
+  }
 });
 
 let globalActiveRole = null;

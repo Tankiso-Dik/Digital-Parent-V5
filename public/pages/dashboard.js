@@ -174,10 +174,24 @@ async function renderScreenControlDashboard(grid, user) {
     </div>
   `).join('');
 
+  
   curfewCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Set Offline Hours. Devices will lock during these times.</p>
-    ${curfewsHtml}
-    <button class="btn btn--secondary" id="add-curfew-btn" style="width: 100%;"><i data-lucide="plus"></i> Add Curfew</button>
+    \${curfewsHtml}
+    
+    <div style="background: var(--bg-body); padding: 16px; border-radius: 12px; border: 1px solid var(--color-border-subtle); margin-bottom: 16px; margin-top: 16px;">
+      <div style="font-weight: bold; margin-bottom: 8px;">New Curfew</div>
+      <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <div style="flex: 1;"><label style="font-size:12px; color:var(--text-muted);">Lock Time</label><input type="time" id="new-curfew-start" class="input" value="21:00"></div>
+        <div style="flex: 1;"><label style="font-size:12px; color:var(--text-muted);">Unlock Time</label><input type="time" id="new-curfew-end" class="input" value="07:00"></div>
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom: 4px;">Days of Week (1=Mon, 7=Sun)</div>
+      <input type="text" id="new-curfew-days" class="input" value="1,2,3,4,5" placeholder="1,2,3,4,5" style="width: 100%; margin-bottom: 12px;">
+      <label style="display:flex; align-items:center; gap:8px; font-size: 14px; margin-bottom: 12px;">
+        <input type="checkbox" id="new-curfew-strict" checked> Strict Mode
+      </label>
+      <button class="btn btn--secondary" id="add-curfew-btn" style="width: 100%;"><i data-lucide="plus"></i> Add Curfew</button>
+    </div>
   `;
 
   curfewCard.querySelectorAll('.del-curfew-btn').forEach(btn => {
@@ -188,14 +202,20 @@ async function renderScreenControlDashboard(grid, user) {
     };
   });
   curfewCard.querySelector('#add-curfew-btn').onclick = async () => {
-    // Basic mock creation for now
+    const start = curfewCard.querySelector('#new-curfew-start').value;
+    const end = curfewCard.querySelector('#new-curfew-end').value;
+    const daysStr = curfewCard.querySelector('#new-curfew-days').value;
+    const strict = curfewCard.querySelector('#new-curfew-strict').checked;
+    const days = daysStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+    
     await apiFetch('/rules/curfew', {
       method: 'POST',
-      body: JSON.stringify({ start_time: '21:00', end_time: '07:00', days_of_week: [1,2,3,4,5], strict_mode: true })
+      body: JSON.stringify({ start_time: start, end_time: end, days_of_week: days, strict_mode: strict })
     });
     grid.innerHTML = '';
     await renderScreenControlDashboard(grid, user);
   };
+
 
   // 5. Live Summary Panel
   const summaryCard = createCard('Policy Summary', 'shield-check', 'var(--color-success)');
