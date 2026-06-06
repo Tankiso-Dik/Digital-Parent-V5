@@ -1,4 +1,5 @@
 // blocker.js - Runs at document_start
+(function() {
 
 /**
  * Single Truth Function for Rule Evaluation
@@ -65,7 +66,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
     if (payload.rules.categories && payload.rules.categories[category]) {
       const rule = payload.rules.categories[category];
       if (rule.action === 'allow') return null;
-      if (rule.action === 'block' || (rule.action === 'limit' && usage[currentDomain] >= rule.limit_mins)) {
+      if (rule.action === 'block' || (rule.action === 'limit' && usage['cat_' + category] >= rule.limit_mins)) {
         return {
           title: 'Category Restricted',
           message: payload.messages?.category_default || 'This app category is restricted right now.'
@@ -136,3 +137,5 @@ function showOverlayBlocker(title, message) {
 }
 
 enforceRules();
+
+})();
