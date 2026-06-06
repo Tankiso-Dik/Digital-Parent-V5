@@ -1,20 +1,22 @@
 const API_URL = 'http://localhost:4000/api/v1/app-usage/logs';
 
 let globalActiveRole = null;
+let lastRoleCheckTime = 0;
 
-async function checkActiveRole() {
-  try {
-    const res = await fetch('http://localhost:4000/api/v1/app-usage/active-role', { credentials: 'include' });
-    const data = await res.json();
-    globalActiveRole = data.active_role;
-  } catch (err) {
-    globalActiveRole = null;
+async function getActiveRole() {
+  // Only fetch from backend if our cached role is older than 30 seconds
+  if (Date.now() - lastRoleCheckTime > 30000) {
+    try {
+      const res = await fetch('http://localhost:4000/api/v1/app-usage/active-role', { credentials: 'include' });
+      const data = await res.json();
+      globalActiveRole = data.active_role;
+      lastRoleCheckTime = Date.now();
+    } catch (err) {
+      globalActiveRole = null;
+    }
   }
+  return globalActiveRole;
 }
-
-// Poll every 30 seconds
-setInterval(checkActiveRole, 30000);
-checkActiveRole();
 
 async function sendLog(domain, startTime, endTime) {
   if (!domain || !startTime || !endTime) return;
@@ -60,7 +62,8 @@ async function startSession(domain, startTime) {
 
 // Handles switching to a new tab/domain.
 async function handleTabChange(tab) {
-  if (globalActiveRole !== 'child') {
+  const role = await getActiveRole();
+  if (role !== 'child') {
     await chrome.storage.local.remove(['activeDomain', 'startTime']);
     return;
   }
