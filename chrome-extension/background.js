@@ -1,44 +1,5 @@
 const API_URL = 'http://localhost:4000/api/v1/app-usage/logs';
 
-let activeTabDomain = null;
-let activeTabStartTime = null;
-
-async function sendLog(domain, startTime, endTime) {
-  if (!domain) return;
-  const duration = Math.floor((endTime - startTime) / 1000); // seconds
-  if (duration < 5) return; // Ignore < 5s
-  
-  // Categorization is mocked for prototype
-  let category_id = 6; // Other
-  if (domain.includes('youtube') || domain.includes('tiktok') || domain.includes('instagram')) category_id = 1; // Social
-  if (domain.includes('roblox') || domain.includes('minecraft')) category_id = 2; // Gaming
-  if (domain.includes('khanacademy') || domain.includes('wikipedia')) category_id = 3; // Education
-  
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        app_identifier: domain,
-        app_name: domain.replace('www.', ''),
-        category_id,
-        start_time: new Date(startTime).toISOString(),
-        end_time: new Date(endTime).toISOString(),
-        duration
-      })
-    });
-    const data = await res.json();
-    if (data.ignored) {
-      console.log('Ignored: not logged in as child');
-    } else {
-      console.log('Logged usage:', domain, duration, 'sec');
-    }
-  } catch (err) {
-    console.error('Failed to log usage:', err);
-  }
-}
-
 let globalActiveRole = null;
 
 async function checkActiveRole() {
@@ -55,38 +16,86 @@ async function checkActiveRole() {
 setInterval(checkActiveRole, 30000);
 checkActiveRole();
 
-function handleTabChange(tab) {
-  if (globalActiveRole !== 'child') {
-    if (activeTabDomain) {
-      activeTabDomain = null; // silently drop tracking
+async function sendLog(domain, startTime, endTime) {
+  if (!domain || !startTime || !endTime) return;
+  const duration = Math.floor((endTime - startTime) / 1000); // seconds
+  if (duration <= 0) return;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_identifier: domain,
+        start_time: new Date(startTime).toISOString(),
+        end_time: new Date(endTime).toISOString(),
+        duration
+      })
+    });
+    const data = await res.json();
+    if (data.ignored) {
+      console.log('Ignored: active role not child');
+    } else {
+      console.log('Logged usage:', domain, duration, 'sec');
     }
+  } catch (err) {
+    console.error('Failed to log usage:', err);
+  }
+}
+
+// Finalizes the current session, sends it to backend, and clears storage.
+async function finalizeSession(endTime) {
+  const data = await chrome.storage.local.get(['activeDomain', 'startTime']);
+  if (data.activeDomain && data.startTime) {
+    await sendLog(data.activeDomain, data.startTime, endTime);
+  }
+  await chrome.storage.local.remove(['activeDomain', 'startTime']);
+}
+
+// Starts a new session in storage.
+async function startSession(domain, startTime) {
+  await chrome.storage.local.set({ activeDomain: domain, startTime: startTime });
+}
+
+// Handles switching to a new tab/domain.
+async function handleTabChange(tab) {
+  if (globalActiveRole !== 'child') {
+    await chrome.storage.local.remove(['activeDomain', 'startTime']);
     return;
   }
 
+  // If the new tab is invalid, finalize current session and stop tracking.
   if (!tab || !tab.url || tab.url.startsWith('chrome://')) {
-    if (activeTabDomain) {
-      sendLog(activeTabDomain, activeTabStartTime, Date.now());
-      activeTabDomain = null;
-    }
+    await finalizeSession(Date.now());
     return;
   }
-  
+
   try {
     const url = new URL(tab.url);
     const domain = url.hostname;
+    const now = Date.now();
+
+    const data = await chrome.storage.local.get(['activeDomain']);
     
-    if (domain !== activeTabDomain) {
-      if (activeTabDomain) {
-        sendLog(activeTabDomain, activeTabStartTime, Date.now());
-      }
-      activeTabDomain = domain;
-      activeTabStartTime = Date.now();
+    // If domain changed, finalize old and start new.
+    if (data.activeDomain !== domain) {
+      await finalizeSession(now);
+      await startSession(domain, now);
     }
-  } catch (e) {}
+  } catch (e) {
+    // URL parsing failed, likely an empty/invalid tab. Finalize tracking.
+    await finalizeSession(Date.now());
+  }
 }
 
-chrome.tabs.onActivated.addListener(activeInfo => {
-  chrome.tabs.get(activeInfo.tabId, handleTabChange);
+// Event Listeners
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    handleTabChange(tab);
+  } catch (err) {}
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -95,15 +104,49 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
-chrome.idle.onStateChanged.addListener(newState => {
-  if (newState === 'idle' || newState === 'locked') {
-    if (activeTabDomain) {
-      sendLog(activeTabDomain, activeTabStartTime, Date.now());
-      activeTabDomain = null;
-    }
-  } else if (newState === 'active') {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+  if (removeInfo.isWindowClosing) return; // Handled by windows.onRemoved
+  // If the tab closed was the active one, we should finalize. 
+  // However, onActivated usually fires right after or before.
+  // To be safe, we query the new active tab.
+  setTimeout(async () => {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0) {
+        handleTabChange(tabs[0]);
+      } else {
+        finalizeSession(Date.now());
+      }
+    } catch(e) {}
+  }, 100);
+});
+
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    // Chrome lost focus
+    await finalizeSession(Date.now());
+  } else {
+    // Chrome gained focus
+    try {
+      const tabs = await chrome.tabs.query({ active: true, windowId: windowId });
       if (tabs.length > 0) handleTabChange(tabs[0]);
-    });
+    } catch(e) {}
   }
+});
+
+chrome.idle.onStateChanged.addListener(async (newState) => {
+  if (newState === 'idle' || newState === 'locked') {
+    await finalizeSession(Date.now());
+  } else if (newState === 'active') {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0) handleTabChange(tabs[0]);
+    } catch(e) {}
+  }
+});
+
+// Capture service worker suspension explicitly if possible (optional safeguard)
+chrome.runtime.onSuspend.addListener(() => {
+  // We don't finalize session on suspend! We want tracking to CONTINUE across sleep.
+  // The storage handles persistence!
 });

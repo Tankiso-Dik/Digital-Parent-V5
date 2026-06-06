@@ -57,11 +57,28 @@ router.post('/logs', (req, res) => {
       return res.json({ ok: true, ignored: true, message: 'Active role is not a child' });
     }
 
-    const { app_identifier, app_name, category_id, start_time, end_time, duration } = req.body;
+    const { app_identifier, start_time, end_time, duration } = req.body;
+    
+    if (!app_identifier || !start_time || !end_time || !duration || duration <= 0) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    // Normalize domain
+    let app_name = app_identifier.replace(/^www\./, '').replace(/^m\./, '');
+    
+    // Categorization logic migrated from Extension to Backend
+    let category_id = 6; // Default to 'Other'
+    if (app_name.includes('youtube') || app_name.includes('tiktok') || app_name.includes('instagram')) category_id = 1; // Social
+    else if (app_name.includes('roblox') || app_name.includes('minecraft')) category_id = 2; // Gaming
+    else if (app_name.includes('khanacademy') || app_name.includes('wikipedia')) category_id = 3; // Education
+    
+    // Look up real ID from database if name mapping changes later
+    // For now we trust the hardcoded 1, 2, 3 mapped to the initial seed
+    
     db.get().prepare(`
       INSERT INTO app_usage_logs (user_id, app_identifier, app_name, category_id, start_time, end_time, duration)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(user.id, app_identifier, app_name, category_id || null, start_time, end_time || null, duration || 0);
+    `).run(user.id, app_identifier, app_name, category_id, start_time, end_time, duration);
 
     res.json({ ok: true });
   } catch (err) {
