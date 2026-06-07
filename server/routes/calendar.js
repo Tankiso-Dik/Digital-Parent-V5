@@ -813,7 +813,7 @@ router.patch('/:id', (req, res) => {
         if (!isParent) {
           return res.status(403).json({ error: 'Nur Eltern können Aufgaben bestätigen', code: 403 });
         }
-        const event = db.get().prepare('SELECT recurrence_rule FROM calendar_events WHERE id = ?').get(id);
+        const event = db.get().prepare('SELECT recurrence_rule, assigned_to FROM calendar_events WHERE id = ?').get(id);
         if (event) {
           if (event.recurrence_rule && date) {
             db.get().prepare(`
