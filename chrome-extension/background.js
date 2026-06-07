@@ -81,12 +81,20 @@ function checkSchedule(rule) {
   if (!rule.start_time || !rule.end_time || !rule.days) return true;
   const now = new Date();
   const currentDay = now.getDay() === 0 ? 7 : now.getDay();
-  if (!rule.days.includes(currentDay)) return false;
   const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  
   if (rule.start_time < rule.end_time) {
+    if (!rule.days.includes(currentDay)) return false;
     return (currentTimeStr >= rule.start_time && currentTimeStr < rule.end_time);
   } else {
-    return (currentTimeStr >= rule.start_time || currentTimeStr < rule.end_time);
+    // Overnight rule
+    if (currentTimeStr >= rule.start_time) {
+      return rule.days.includes(currentDay);
+    } else if (currentTimeStr < rule.end_time) {
+      const yesterday = currentDay === 1 ? 7 : currentDay - 1;
+      return rule.days.includes(yesterday);
+    }
+    return false;
   }
 }
 
@@ -128,23 +136,13 @@ function checkLimits(domain, category, usage, payload) {
     const currentDay = now.getDay() === 0 ? 7 : now.getDay();
     const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
     for (const c of payload.curfews) {
-      if (c.days.includes(currentDay) && c.strict_mode) {
-        if (c.start_time < c.end_time) {
-          if (currentTimeStr >= c.start_time && currentTimeStr < c.end_time) block = true;
-        } else {
-          if (currentTimeStr >= c.start_time || currentTimeStr < c.end_time) block = true;
-        }
+      if (c.strict_mode && checkSchedule(c)) {
+        block = true;
       }
     }
   }
 
-  if (block) {
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-      if (tabs.length > 0) {
-        chrome.scripting.executeScript({ target: {tabId: tabs[0].id}, files: ['blocker.js'] }).catch(e => {});
-      }
-    });
-  }
+
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {

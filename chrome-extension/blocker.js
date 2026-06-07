@@ -2,15 +2,23 @@
 (function() {
 
 function checkSchedule(rule) {
-  if (!rule.start_time || !rule.end_time || !rule.days) return true; // No schedule, always active
+  if (!rule.start_time || !rule.end_time || !rule.days) return true;
   const now = new Date();
   const currentDay = now.getDay() === 0 ? 7 : now.getDay();
-  if (!rule.days.includes(currentDay)) return false;
   const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  
   if (rule.start_time < rule.end_time) {
+    if (!rule.days.includes(currentDay)) return false;
     return (currentTimeStr >= rule.start_time && currentTimeStr < rule.end_time);
   } else {
-    return (currentTimeStr >= rule.start_time || currentTimeStr < rule.end_time);
+    // Overnight rule
+    if (currentTimeStr >= rule.start_time) {
+      return rule.days.includes(currentDay);
+    } else if (currentTimeStr < rule.end_time) {
+      const yesterday = currentDay === 1 ? 7 : currentDay - 1;
+      return rule.days.includes(yesterday);
+    }
+    return false;
   }
 }
 
@@ -68,16 +76,8 @@ function shouldBlock(currentDomain, payload, usageObj) {
     const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
     
     for (const c of payload.curfews) {
-      if (c.days.includes(currentDay)) {
-        let isCurfewActive = false;
-        if (c.start_time < c.end_time) {
-          isCurfewActive = (currentTimeStr >= c.start_time && currentTimeStr < c.end_time);
-        } else {
-          isCurfewActive = (currentTimeStr >= c.start_time || currentTimeStr < c.end_time);
-        }
-        if (isCurfewActive && c.strict_mode) {
-          return buildBlockResponse('Curfew Active', c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.', c);
-        }
+      if (checkSchedule(c) && c.strict_mode) {
+        return buildBlockResponse('Curfew Active', c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.', c);
       }
     }
   }
