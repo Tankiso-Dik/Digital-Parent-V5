@@ -255,6 +255,18 @@ function timeAgo(dateString) {
         <button id="add-expected-btn" class="btn btn--secondary btn--sm" style="width: 100%; margin-bottom: 10px;">
           <i data-lucide="clock"></i> Add Expected Check-in
         </button>
+        <div id="expected-form-container" style="display: none; background: var(--bg-body); padding: 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle); margin-bottom: 10px;">
+          <label style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: block;">Child</label>
+          <select id="ef-child" class="form-input" style="margin-bottom: 8px; font-size: 13px;"></select>
+          <label style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: block;">Destination Zone</label>
+          <select id="ef-zone" class="form-input" style="margin-bottom: 8px; font-size: 13px;"></select>
+          <label style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: block;">Expected Time</label>
+          <input type="time" id="ef-time" class="form-input" style="margin-bottom: 10px; font-size: 13px;" required />
+          <div style="display: flex; gap: 8px;">
+            <button id="ef-save" class="btn btn--primary btn--sm" style="flex: 1;">Save</button>
+            <button id="ef-cancel" class="btn btn--ghost btn--sm" style="flex: 1;">Cancel</button>
+          </div>
+        </div>
         <div id="expected-list" style="margin-bottom: 15px; font-size: 13px;">Loading expected check-ins...</div>
 
         <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--color-border-subtle);">
@@ -266,10 +278,18 @@ function timeAgo(dateString) {
       if (window.lucide) window.lucide.createIcons({ el: sidebar });
 
       const addExpectedBtn = sidebar.querySelector('#add-expected-btn');
+      const efContainer = sidebar.querySelector('#expected-form-container');
+      const efChild = sidebar.querySelector('#ef-child');
+      const efZone = sidebar.querySelector('#ef-zone');
+      const efTime = sidebar.querySelector('#ef-time');
+      const efSave = sidebar.querySelector('#ef-save');
+      const efCancel = sidebar.querySelector('#ef-cancel');
+
       if (addExpectedBtn) {
         addExpectedBtn.onclick = async () => {
-          if (familyZones.length === 0) {
-             alert('Please define a Family Zone first!');
+          const safeZones = familyZones.filter(z => z.zone_type !== 'danger');
+          if (safeZones.length === 0) {
+             alert('Please define a Safe Zone or School first! (Danger zones cannot be used as expected destinations)');
              return;
           }
           try {
@@ -280,34 +300,46 @@ function timeAgo(dateString) {
                 return;
              }
              
-             let childOptions = children.map((c, i) => `${i}: ${c.display_name}`).join('\n');
-             const childIdxStr = prompt(`Select child by number:\n${childOptions}`);
-             if (!childIdxStr) return;
-             const childIdx = parseInt(childIdxStr);
-             if (isNaN(childIdx) || !children[childIdx]) return;
+             efChild.innerHTML = children.map(c => `<option value="${c.id}">${c.display_name}</option>`).join('');
+             efZone.innerHTML = safeZones.map(z => `<option value="${z.name}">${z.name}</option>`).join('');
+             efTime.value = '15:00';
              
-             let zoneOptions = familyZones.map((z, i) => `${i}: ${z.name}`).join('\n');
-             const zoneIdxStr = prompt(`Select zone by number:\n${zoneOptions}`);
-             if (!zoneIdxStr) return;
-             const zoneIdx = parseInt(zoneIdxStr);
-             if (isNaN(zoneIdx) || !familyZones[zoneIdx]) return;
-             
-             const expectedTime = prompt('Expected time (HH:MM) e.g. 15:30:');
-             if (!expectedTime || !/^\d\d:\d\d$/.test(expectedTime)) return;
-             
+             addExpectedBtn.style.display = 'none';
+             efContainer.style.display = 'block';
+          } catch(e) {
+             showToast('Error loading form data', 'error');
+          }
+        };
+
+        efCancel.onclick = () => {
+          efContainer.style.display = 'none';
+          addExpectedBtn.style.display = 'block';
+        };
+
+        efSave.onclick = async () => {
+          const expectedTime = efTime.value;
+          if (!expectedTime) return;
+          efSave.disabled = true;
+          efSave.textContent = 'Saving...';
+          try {
              await apiFetch('/location/expected', {
                 method: 'POST',
                 body: JSON.stringify({
-                  user_id: children[childIdx].id,
-                  zone_name: familyZones[zoneIdx].name,
+                  user_id: efChild.value,
+                  zone_name: efZone.value,
                   expected_time: expectedTime,
                   days_of_week: [1,2,3,4,5]
                 })
              });
              showToast('Expected check-in added!', 'success');
+             efContainer.style.display = 'none';
+             addExpectedBtn.style.display = 'block';
              loadExpectedCheckins();
           } catch(e) {
              showToast('Error adding check-in', 'error');
+          } finally {
+             efSave.disabled = false;
+             efSave.textContent = 'Save';
           }
         };
       }
