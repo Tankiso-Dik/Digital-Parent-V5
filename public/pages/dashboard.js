@@ -233,7 +233,17 @@ async function renderScreenControlDashboard(grid, user) {
             <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">End Time</label><input type="time" id="url-end" class="input" style="width:100%;" value="17:00"></div>
           </div>
           <input type="text" id="url-days" class="input" placeholder="Days (1=Mon, 7=Sun)" style="width: 100%; margin-bottom: 8px;" value="[1,2,3,4,5]">
-          <input type="text" id="url-msg" class="input" placeholder="Custom Block Message (Optional)" style="width: 100%;">
+          <select id="url-preset-msgs" class="input" style="width: 100%; margin-bottom: 8px;">
+            <option value="">-- Choose a Preset Message --</option>
+            <option value="Time to do your homework!">Time to do your homework!</option>
+            <option value="Focus time. No distractions.">Focus time. No distractions.</option>
+            <option value="Go play outside!">Go play outside!</option>
+            <option value="Chores first, screen time later.">Chores first, screen time later.</option>
+            <option value="Dinner time!">Dinner time!</option>
+            <option value="Bedtime schedule is active.">Bedtime schedule is active.</option>
+            <option value="Family time. Please disconnect.">Family time. Please disconnect.</option>
+          </select>
+          <input type="text" id="url-msg" class="input" placeholder="Or type a custom message..." style="width: 100%;">
         </div>
         
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
@@ -249,6 +259,14 @@ async function renderScreenControlDashboard(grid, user) {
     typeRadios.forEach(r => r.addEventListener('change', () => {
       scheduleInputs.style.display = r.value === 'scheduled' ? 'block' : 'none';
     }));
+
+    const presetSelect = modal.querySelector('#url-preset-msgs');
+    const msgInput = modal.querySelector('#url-msg');
+    presetSelect.addEventListener('change', (e) => {
+      if (e.target.value) {
+        msgInput.value = e.target.value;
+      }
+    });
     
     modal.querySelector('#url-cancel-btn').onclick = () => modal.remove();
     
