@@ -382,8 +382,7 @@ export async function render(container, { user }) {
           <div class="settings-card settings-card--modules">
             <h3 class="settings-card__title">${t('settings.modulesTitle')}</h3>
             <p class="form-hint" style="margin-bottom:var(--space-3)">${t('settings.modulesHint')}</p>
-            <p class="form-hint" style="margin-bottom:var(--space-3)">${t('settings.modulesDragHint')}</p>
-            <div class="settings-modules-list settings-modules-list--sortable" id="module-toggles">
+            <div class="settings-modules-list" id="module-toggles">
               ${activeModuleRowsHtml(prefs, thirdPartyModules)}
             </div>
           </div>
@@ -1340,22 +1339,8 @@ function activeModuleRowsHtml(prefs, thirdPartyModules) {
     const inputAttr = isThirdParty
       ? `data-third-party-module-toggle="${esc(module.id)}"`
       : `data-built-in-module-toggle="${esc(module.id)}"`;
-    const rowAttr = module.draggable
-      ? `draggable="true" data-module-order-id="${esc(module.orderId)}"`
-      : '';
     return `
-      <div class="settings-module-row settings-module-row--sortable" ${rowAttr} data-module-row-id="${esc(module.orderId)}">
-        <button type="button" class="settings-module-drag" aria-label="${esc(t('settings.modulesDragHandle'))}" title="${esc(t('settings.modulesDragHandle'))}" ${module.draggable ? '' : 'disabled'}>
-          <i data-lucide="grip-vertical" aria-hidden="true"></i>
-        </button>
-        <div class="settings-module-move-buttons">
-          <button type="button" class="settings-module-move" data-module-move="up" aria-label="${esc(t('settings.modulesMoveUp'))}" title="${esc(t('settings.modulesMoveUp'))}" ${module.draggable ? '' : 'disabled'}>
-            <i data-lucide="chevron-up" aria-hidden="true"></i>
-          </button>
-          <button type="button" class="settings-module-move" data-module-move="down" aria-label="${esc(t('settings.modulesMoveDown'))}" title="${esc(t('settings.modulesMoveDown'))}" ${module.draggable ? '' : 'disabled'}>
-            <i data-lucide="chevron-down" aria-hidden="true"></i>
-          </button>
-        </div>
+      <div class="settings-module-row" data-module-row-id="${esc(module.orderId)}">
         <div class="settings-module-row__icon" style="--module-row-accent:${esc(module.accent || '#6366F1')}">
           <i data-lucide="${esc(module.icon)}" aria-hidden="true"></i>
         </div>

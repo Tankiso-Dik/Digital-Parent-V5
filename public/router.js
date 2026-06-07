@@ -1286,13 +1286,6 @@ function navItems() {
     ...baseItems.filter((item) => item.module !== 'settings' && !_disabledModules.has(item.module)),
     ...thirdPartyItems,
   ];
-  const orderIndex = new Map(_moduleOrder.map((id, index) => [id, index]));
-  sortable.sort((a, b) => {
-    const ai = orderIndex.has(a.module) ? orderIndex.get(a.module) : Number.MAX_SAFE_INTEGER;
-    const bi = orderIndex.has(b.module) ? orderIndex.get(b.module) : Number.MAX_SAFE_INTEGER;
-    if (ai !== bi) return ai - bi;
-    return 0;
-  });
   return settings ? [...sortable, settings] : sortable;
 }
 
