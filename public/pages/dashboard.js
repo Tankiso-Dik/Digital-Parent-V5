@@ -375,18 +375,13 @@ async function renderScreenControlDashboard(grid, user) {
 
 
   // 5. Live Summary Panel
-  const summaryCard = createCard('Policy Summary', 'shield-check', 'var(--color-success)');
+  const summaryCard = createCard('Extension Sync', 'refresh-cw', 'var(--color-success)');
   grid.appendChild(summaryCard);
   
   summaryCard.innerHTML += `
     <div style="background: rgba(52, 199, 89, 0.1); padding: 20px; border-radius: 16px; border: 1px solid rgba(52, 199, 89, 0.3);">
-      <h4 style="margin: 0 0 16px 0; color: var(--color-success); display: flex; align-items: center; gap: 8px;"><i data-lucide="activity"></i> Active Enforcement</h4>
-      <ul style="margin: 0; padding-left: 20px; color: var(--text-main); font-size: 14px; line-height: 1.8;">
-        <li><strong>${rulesData.blocked_rules.filter(r=>r.type==='category').length}</strong> Category rules</li>
-        <li><strong>${rulesData.blocked_rules.filter(r => r.type === 'domain' || r.type === 'wildcard').length}</strong> URL rules</li>
-        <li><strong>${rulesData.curfews.length}</strong> active Curfews</li>
-      </ul>
-      <button class="btn btn--success" id="sync-rules-btn" style="width: 100%; margin-top: 20px; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules to Extension</button>
+      <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px; text-align: center;">Manually force the extension to sync immediately.</p>
+      <button class="btn btn--success" id="sync-rules-btn" style="width: 100%; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules</button>
     </div>
   `;
 
