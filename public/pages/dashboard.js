@@ -373,60 +373,6 @@ async function renderScreenControlDashboard(grid, user) {
     }
   };
 
-  // 4.5 Pending Confirmations (Parent reviewing child tasks)
-  const confirmCard = createCard('Pending Confirmations', 'check-square', 'var(--color-primary)');
-  grid.appendChild(confirmCard);
-  
-  try {
-    const today = new Date().toISOString().slice(0, 10);
-    const res = await apiFetch(`/calendar?from=${today}&to=${today}&status=done`);
-    const doneTasks = (res.data || []).filter(r => 
-      (r.category === 'chore' || r.category === 'study' || r.category === 'routine' || r.category === 'medication') && 
-      r.status === 'done' && 
-      !r.is_confirmed
-    );
-    
-    if (doneTasks.length === 0) {
-      confirmCard.innerHTML += `<div style="padding: 20px 0; text-align: center; color: var(--text-muted);"><i data-lucide="check-circle" style="width: 32px; height: 32px; margin-bottom: 8px;"></i><br>No tasks pending confirmation.</div>`;
-    } else {
-      const list = document.createElement('div');
-      list.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
-      doneTasks.forEach(r => {
-        const item = document.createElement('div');
-        item.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 10px; border-radius: 12px; background: var(--bg-body); border: 1px solid var(--color-border-subtle);`;
-        item.innerHTML = `
-          <div>
-            <div style="font-weight: 600; font-size: 14px;">${r.title}</div>
-            <div style="font-size: 11px; color: var(--text-secondary);">Completed Today</div>
-          </div>
-          <button class="btn btn--primary btn--sm confirm-task-btn" data-id="${r.id}" data-desc="${(r.description || '').replace(/"/g, '&quot;')}" style="padding: 4px 10px;">Confirm</button>
-        `;
-        list.appendChild(item);
-      });
-      confirmCard.appendChild(list);
-      
-      confirmCard.querySelectorAll('.confirm-task-btn').forEach(btn => {
-        btn.onclick = async (e) => {
-          btn.disabled = true;
-          try {
-             await apiFetch('/calendar/' + btn.dataset.id, { 
-               method: 'PATCH',
-               body: JSON.stringify({ status: 'confirmed', date: today })
-             });
-             showToast('Task confirmed!', 'success');
-             grid.innerHTML = '';
-             await renderScreenControlDashboard(grid, user);
-          } catch(err) {
-             showToast('Error confirming task', 'danger');
-             btn.disabled = false;
-          }
-        };
-      });
-    }
-  } catch(e) {
-    console.error('Failed to load pending confirmations', e);
-  }
-
 
   // 5. Live Summary Panel
   const summaryCard = createCard('Policy Summary', 'shield-check', 'var(--color-success)');
