@@ -156,6 +156,10 @@ router.get('/zones', (req, res) => {
 
 router.post('/zones', (req, res) => {
   try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
     const { name, lat, lng, zone_type, radius } = req.body;
     db.get().prepare(`
       INSERT INTO family_zones (name, lat, lng, zone_type, radius)
@@ -185,6 +189,10 @@ router.get('/history/:id', (req, res) => {
 
 router.delete('/zones/:id', (req, res) => {
   try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
     db.get().prepare('DELETE FROM family_zones WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
   } catch(e) {
@@ -194,6 +202,10 @@ router.delete('/zones/:id', (req, res) => {
 
 router.patch('/zones/:id', (req, res) => {
   try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
     const { radius } = req.body;
     db.get().prepare('UPDATE family_zones SET radius = ? WHERE id = ?').run(radius, req.params.id);
     res.json({ ok: true });
@@ -296,6 +308,10 @@ router.get('/expected', (req, res) => {
 
 router.post('/expected', (req, res) => {
   try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
     const { user_id, zone_name, expected_time, days_of_week } = req.body;
     db.get().prepare(`
       INSERT INTO expected_checkins (user_id, zone_name, expected_time, days_of_week)
@@ -309,6 +325,10 @@ router.post('/expected', (req, res) => {
 
 router.delete('/expected/:id', (req, res) => {
   try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
     db.get().prepare('DELETE FROM expected_checkins WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
   } catch(e) {
