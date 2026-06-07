@@ -791,18 +791,6 @@ router.patch('/:id', (req, res) => {
             // Update master event for non-recurring
             db.get().prepare('UPDATE calendar_events SET status = ? WHERE id = ?').run(status, id);
           }
-
-          // Award points if not already done (for single) or for this instance (recurring)
-          // Note: In a production app, we'd check if points were already awarded for this specific instance date.
-          if (event.assigned_to) {
-            db.get().prepare(`
-              UPDATE users 
-              SET points = COALESCE(points, 0) + 10,
-                  current_streak = COALESCE(current_streak, 0) + 1,
-                  highest_streak = MAX(COALESCE(highest_streak, 0), COALESCE(current_streak, 0) + 1)
-              WHERE id = ?
-            `).run(event.assigned_to);
-          }
         }
       } else if (status === 'failed') {
         const event = db.get().prepare('SELECT assigned_to, recurrence_rule FROM calendar_events WHERE id = ?').get(id);
@@ -835,6 +823,16 @@ router.patch('/:id', (req, res) => {
             `).run(id, date);
           } else {
             db.get().prepare('UPDATE calendar_events SET is_confirmed = 1 WHERE id = ?').run(id);
+          }
+
+          if (event.assigned_to) {
+            db.get().prepare(`
+              UPDATE users 
+              SET points = COALESCE(points, 0) + 10,
+                  current_streak = COALESCE(current_streak, 0) + 1,
+                  highest_streak = MAX(COALESCE(highest_streak, 0), COALESCE(current_streak, 0) + 1)
+              WHERE id = ?
+            `).run(event.assigned_to);
           }
         }
       } else {

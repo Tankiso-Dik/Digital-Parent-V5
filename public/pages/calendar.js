@@ -195,7 +195,7 @@ export async function render(container, { user }) {
                 date: formatDateObj(currentDate)
               }) 
             });
-            showToast('Great job! You earned 10 points!', 'success');
+            showToast('Task completed! Awaiting parent confirmation.', 'success');
             
             // Trigger Confetti
             if (!window.confetti) {
@@ -222,24 +222,7 @@ export async function render(container, { user }) {
 
         const isTask = true;
 
-        if (isTask && !isDone) {
-          const actBtn = document.createElement('button');
-          actBtn.className = 'btn btn--success btn--sm';
-          actBtn.innerHTML = 'Mark Done';
-          actBtn.onclick = async (e) => {
-            e.preventDefault(); e.stopPropagation();
-            actBtn.disabled = true;
-            try {
-              await apiFetch(`/calendar/${ev.id}`, { 
-                method: 'PATCH', 
-                body: JSON.stringify({ status: 'done', date: formatDateObj(currentDate) }) 
-              });
-              showToast('Marked as done for child', 'success');
-              await loadData();
-            } catch(err) { showToast('Error', 'danger'); actBtn.disabled = false; }
-          };
-          actionWrap.appendChild(actBtn);
-        } else if (isTask && isDone && !ev.is_confirmed) {
+        if (isTask && isDone && !ev.is_confirmed) {
           const confirmBtn = document.createElement('button');
           confirmBtn.className = 'btn btn--primary btn--sm';
           confirmBtn.innerHTML = 'Confirm';
