@@ -80,7 +80,7 @@ async function renderScreenControlDashboard(grid, user) {
           await apiFetch('/reports/emergency/' + req.id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
         } catch(e) {}
       }
-      window.location.hash = '/location';
+      window.oikos.navigate('/location');
     };
   }
 
@@ -116,9 +116,15 @@ async function renderScreenControlDashboard(grid, user) {
       await apiFetch('/rules/rule/' + id, { method: 'DELETE' });
       await triggerSilentSync();
       showToast('Rule deleted', 'success');
-      // reload
-      grid.innerHTML = '';
-      await renderScreenControlDashboard(grid, user);
+      const backup = grid.innerHTML;
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;"><i data-lucide="loader" class="spin"></i> Refreshing...</div>';
+      if (window.lucide) window.lucide.createIcons({ el: grid });
+      try {
+        grid.innerHTML = '';
+        await renderScreenControlDashboard(grid, user);
+      } catch (err) {
+        grid.innerHTML = backup;
+      }
     } catch(e) {
       showToast('Error deleting rule', 'danger');
     }
@@ -185,9 +191,15 @@ async function renderScreenControlDashboard(grid, user) {
   };
 
   urlCard.querySelector('#add-url-btn').onclick = async () => {
-    const val = urlCard.querySelector('#new-url-input').value.trim();
+    let val = urlCard.querySelector('#new-url-input').value.trim();
     if(!val) return;
-    const type = val.includes('*') ? 'wildcard' : 'domain';
+    let type = 'domain';
+    if (val.includes('*')) {
+      type = 'wildcard';
+    } else if (!val.startsWith('http')) {
+      val = '*.' + val.replace(/^www\./, '');
+      type = 'wildcard';
+    }
     
     // Create Premium Modal
     const modal = document.createElement('div');
@@ -234,7 +246,16 @@ async function renderScreenControlDashboard(grid, user) {
             <div style="flex: 1;"><label style="font-size: 12px; color: #666;">Start Time</label><input type="time" id="url-start" class="input" style="width:100%; background: white; color: black; border: 1px solid #ccc;" value="15:00"></div>
             <div style="flex: 1;"><label style="font-size: 12px; color: #666;">End Time</label><input type="time" id="url-end" class="input" style="width:100%; background: white; color: black; border: 1px solid #ccc;" value="17:00"></div>
           </div>
-          <input type="text" id="url-days" class="input" placeholder="Days (1=Mon, 7=Sun)" style="width: 100%; margin-bottom: 8px; background: white; color: black; border: 1px solid #ccc;" value="[1,2,3,4,5]">
+          <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Active Days</div>
+          <div id="url-days" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; background: white; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="1" checked> Mon</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="2" checked> Tue</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="3" checked> Wed</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="4" checked> Thu</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="5" checked> Fri</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="6"> Sat</label>
+            <label style="font-size:13px; color:black; cursor:pointer;"><input type="checkbox" value="7"> Sun</label>
+          </div>
           <select id="url-preset-msgs" class="input" style="width: 100%; margin-bottom: 8px; background: white; color: black; border: 1px solid #ccc;">
             <option value="">-- Choose a Preset Message --</option>
             <option value="Time to do your homework!">Time to do your homework!</option>
@@ -282,7 +303,7 @@ async function renderScreenControlDashboard(grid, user) {
       if (blockType === 'scheduled') {
         sTime = modal.querySelector('#url-start').value;
         eTime = modal.querySelector('#url-end').value;
-        try { days = JSON.parse(modal.querySelector('#url-days').value); } catch(e) { days = [1,2,3,4,5,6,7]; }
+        days = Array.from(modal.querySelectorAll('#url-days input:checked')).map(cb => parseInt(cb.value));
         cMsg = modal.querySelector('#url-msg').value.trim() || null;
       } else if (blockType === 'limit') {
         action = 'limit';
@@ -290,13 +311,24 @@ async function renderScreenControlDashboard(grid, user) {
         const m = parseInt(modal.querySelector('#url-limit-mins').value, 10) || 0;
         const s = parseInt(modal.querySelector('#url-limit-secs').value, 10) || 0;
         limitMins = (h * 60) + m + (s / 60);
-        if (limitMins <= 0) limitMins = 60; // fallback if 0
+        if (limitMins <= 0) {
+          showToast('Time limit must be greater than 0', 'danger');
+          modal.querySelector('#url-save-btn').disabled = false;
+          return;
+        }
       }
       
       await saveRule(type, val, action, limitMins, sTime, eTime, days, cMsg);
       modal.remove();
-      grid.innerHTML = '';
-      await renderScreenControlDashboard(grid, user);
+      const backup = grid.innerHTML;
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;"><i data-lucide="loader" class="spin"></i> Refreshing...</div>';
+      if (window.lucide) window.lucide.createIcons({ el: grid });
+      try {
+        grid.innerHTML = '';
+        await renderScreenControlDashboard(grid, user);
+      } catch (err) {
+        grid.innerHTML = backup;
+      }
     };
   };
   urlCard.querySelectorAll('.del-url-btn').forEach(btn => {
@@ -374,8 +406,16 @@ async function renderScreenControlDashboard(grid, user) {
         <div style="flex: 1;"><label style="font-size:12px; color:var(--text-muted);">Lock Time</label><input type="time" id="new-curfew-start" class="input" value="21:00"></div>
         <div style="flex: 1;"><label style="font-size:12px; color:var(--text-muted);">Unlock Time</label><input type="time" id="new-curfew-end" class="input" value="07:00"></div>
       </div>
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom: 4px;">Days of Week (1=Mon, 7=Sun)</div>
-      <input type="text" id="new-curfew-days" class="input" value="1,2,3,4,5" placeholder="1,2,3,4,5" style="width: 100%; margin-bottom: 12px;">
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom: 4px;">Active Days</div>
+      <div id="new-curfew-days" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 8px; background: var(--bg-body); border: 1px solid var(--color-border-subtle); border-radius: 4px;">
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="1" checked> Mon</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="2" checked> Tue</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="3" checked> Wed</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="4" checked> Thu</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="5" checked> Fri</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="6"> Sat</label>
+        <label style="font-size:13px; cursor:pointer;"><input type="checkbox" value="7"> Sun</label>
+      </div>
       <label style="display:flex; align-items:center; gap:8px; font-size: 14px; margin-bottom: 12px;">
         <input type="checkbox" id="new-curfew-strict" checked> Strict Mode
       </label>
@@ -390,8 +430,15 @@ async function renderScreenControlDashboard(grid, user) {
         await apiFetch('/rules/curfew/' + btn.dataset.id, { method: 'DELETE' });
         await triggerSilentSync();
         showToast('Curfew deleted', 'success');
-        grid.innerHTML = '';
-        await renderScreenControlDashboard(grid, user);
+        const backup = grid.innerHTML;
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;"><i data-lucide="loader" class="spin"></i> Refreshing...</div>';
+        if (window.lucide) window.lucide.createIcons({ el: grid });
+        try {
+          grid.innerHTML = '';
+          await renderScreenControlDashboard(grid, user);
+        } catch (err) {
+          grid.innerHTML = backup;
+        }
       } catch (err) {
         showToast('Error deleting curfew', 'danger');
         btn.disabled = false;
@@ -403,9 +450,8 @@ async function renderScreenControlDashboard(grid, user) {
     try {
       const start = curfewCard.querySelector('#new-curfew-start').value;
       const end = curfewCard.querySelector('#new-curfew-end').value;
-      const daysStr = curfewCard.querySelector('#new-curfew-days').value;
       const strict = curfewCard.querySelector('#new-curfew-strict').checked;
-      const days = daysStr.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+      const days = Array.from(curfewCard.querySelectorAll('#new-curfew-days input:checked')).map(cb => parseInt(cb.value));
       
       await apiFetch('/rules/curfew', {
         method: 'POST',
@@ -413,8 +459,15 @@ async function renderScreenControlDashboard(grid, user) {
       });
       await triggerSilentSync();
       showToast('Curfew added', 'success');
-      grid.innerHTML = '';
-      await renderScreenControlDashboard(grid, user);
+      const backup = grid.innerHTML;
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;"><i data-lucide="loader" class="spin"></i> Refreshing...</div>';
+      if (window.lucide) window.lucide.createIcons({ el: grid });
+      try {
+        grid.innerHTML = '';
+        await renderScreenControlDashboard(grid, user);
+      } catch (err) {
+        grid.innerHTML = backup;
+      }
     } catch (err) {
       showToast('Error adding curfew', 'danger');
       e.target.disabled = false;
