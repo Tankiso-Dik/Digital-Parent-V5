@@ -347,14 +347,29 @@ function timeAgo(dateString) {
       const requestLocBtn = sidebar.querySelector('#request-location-btn');
       if (requestLocBtn) {
         requestLocBtn.onclick = async () => {
+          const originalText = requestLocBtn.innerHTML;
           requestLocBtn.disabled = true;
+          requestLocBtn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Sending...';
           try {
              await apiFetch('/location/request', { method: 'POST' });
-             showToast('Location request sent to children', 'success');
+             requestLocBtn.innerHTML = '<i data-lucide="check-circle-2"></i> Request Sent!';
+             requestLocBtn.style.backgroundColor = 'var(--color-success)';
+             requestLocBtn.style.color = 'white';
+             if (window.lucide) window.lucide.createIcons({ el: requestLocBtn });
+             
+             // Keep it disabled for 3 seconds to prevent spam and show success
+             setTimeout(() => {
+               requestLocBtn.innerHTML = originalText;
+               requestLocBtn.style.backgroundColor = '';
+               requestLocBtn.style.color = '';
+               requestLocBtn.disabled = false;
+               if (window.lucide) window.lucide.createIcons({ el: requestLocBtn });
+             }, 3000);
           } catch(e) {
-             showToast('Failed to send request', 'error');
-          } finally {
+             requestLocBtn.innerHTML = originalText;
              requestLocBtn.disabled = false;
+             if (window.lucide) window.lucide.createIcons({ el: requestLocBtn });
+             showToast('Failed to send request', 'error');
           }
         };
       }
