@@ -193,12 +193,10 @@ async function renderScreenControlDashboard(grid, user) {
   urlCard.querySelector('#add-url-btn').onclick = async () => {
     let val = urlCard.querySelector('#new-url-input').value.trim();
     if(!val) return;
-    let type = 'domain';
-    if (val.includes('*')) {
-      type = 'wildcard';
-    } else if (!val.startsWith('http')) {
-      val = '*.' + val.replace(/^www\./, '');
-      type = 'wildcard';
+    let type = val.includes('*') ? 'wildcard' : 'domain';
+    // Remove http/https and www. for clean domain blocking
+    if (type === 'domain') {
+      val = val.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
     }
     
     // Create Premium Modal
