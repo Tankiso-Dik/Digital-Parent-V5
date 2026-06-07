@@ -124,47 +124,6 @@ async function renderScreenControlDashboard(grid, user) {
     }
   };
 
-  // 2. Category Controls
-  const categoryCard = createCard('Category Controls', 'layers', 'var(--color-primary)');
-  grid.appendChild(categoryCard);
-  
-  const cats = [
-    { id: 'social', name: 'Social Media', desc: 'TikTok, Instagram, Snapchat' },
-    { id: 'gaming', name: 'Gaming', desc: 'Roblox, Minecraft, Steam' },
-    { id: 'education', name: 'Education', desc: 'Wikipedia, Khan Academy' }
-  ];
-
-  let catHtml = `<p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Manage broad app categories across all devices.</p>`;
-  cats.forEach(c => {
-    const rule = getRule('category', c.id) || { action: 'allow' };
-    catHtml += `
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 12px; margin-bottom: 12px;">
-        <div>
-          <strong style="display: block;">${c.name}</strong>
-          <span style="font-size: 12px; color: var(--text-muted);">${c.desc}</span>
-        </div>
-        <select class="input cat-select" data-cat="${c.id}" style="width: 120px; padding: 6px;">
-          <option value="allow" ${rule.action==='allow'?'selected':''}>Allow</option>
-          <option value="limit" ${rule.action==='limit'?'selected':''}>Limit (1h)</option>
-          <option value="block" ${rule.action==='block'?'selected':''}>Block</option>
-        </select>
-      </div>
-    `;
-  });
-  categoryCard.innerHTML += catHtml;
-  categoryCard.querySelectorAll('.cat-select').forEach(sel => {
-    sel.addEventListener('change', async (e) => {
-      sel.disabled = true;
-      try {
-        await saveRule('category', e.target.dataset.cat, e.target.value, e.target.value === 'limit' ? 60 : null);
-        grid.innerHTML = '';
-        await renderScreenControlDashboard(grid, user);
-      } catch (err) {
-        sel.disabled = false;
-      }
-    });
-  });
-
   // 3. Manual URL Blocking
   const urlCard = createCard('Manual URL Blocking', 'globe', '#FF3B30');
   grid.appendChild(urlCard);
