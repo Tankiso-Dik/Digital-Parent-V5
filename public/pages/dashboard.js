@@ -333,6 +333,32 @@ async function renderScreenControlDashboard(grid, user) {
     btn.onclick = () => deleteRule(btn.dataset.id);
   });
 
+
+  // 4. Category Controls
+  const categoryCard = createCard('App Categories', 'grid', '#34C759');
+  grid.appendChild(categoryCard);
+  
+  categoryCard.innerHTML += `
+    <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Block entire categories of apps & sites. (Premium Feature)</p>
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <select id="new-category-input" class="input" style="flex: 1; background: white; color: black; border: 1px solid #ccc;">
+        <option value="">Select Category...</option>
+        <option value="Social Media">Social Media</option>
+        <option value="Gaming">Gaming</option>
+        <option value="Video Streaming">Video Streaming</option>
+        <option value="Adult Content">Adult Content</option>
+      </select>
+      <button class="btn btn--primary" id="add-category-btn">Block Category</button>
+    </div>
+  `;
+
+  categoryCard.querySelector('#add-category-btn').onclick = async () => {
+    const val = categoryCard.querySelector('#new-category-input').value;
+    if(!val) return;
+    await saveRule('category', val, 'block');
+    categoryCard.querySelector('#new-category-input').value = '';
+  };
+
   // 3.5 Active Blocked Rules List
   const blockedRulesCard = createCard('Active Blocked Rules', 'shield-off', '#FF3B30');
   grid.appendChild(blockedRulesCard);
