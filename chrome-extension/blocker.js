@@ -14,6 +14,38 @@ function checkSchedule(rule) {
   }
 }
 
+function buildBlockResponse(title, baseMessage, rule) {
+  let extraHtml = '';
+  
+  if (rule && rule.start_time && rule.end_time) {
+    const now = new Date();
+    const endParts = rule.end_time.split(':');
+    let endMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(endParts[0], 10), parseInt(endParts[1], 10), 0).getTime();
+    if (endMs < now.getTime()) endMs += 24 * 60 * 60 * 1000;
+    
+    const diffMins = Math.ceil((endMs - now.getTime()) / 60000);
+    let remStr = diffMins > 60 ? `${Math.floor(diffMins/60)}h ${diffMins%60}m` : `${diffMins}m`;
+    
+    extraHtml = `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Time Remaining</div>
+      <div style="font-size: 20px; font-weight: bold; color: white;">${remStr}</div>
+      <div style="font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px;">Unlocks at ${rule.end_time}</div>
+    </div>`;
+  } else if (rule && rule.action === 'limit') {
+    extraHtml = `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Time Remaining</div>
+      <div style="font-size: 20px; font-weight: bold; color: #FF3B30;">0m</div>
+      <div style="font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px;">Daily limit of ${rule.limit_mins}m reached.</div>
+    </div>`;
+  }
+
+  return {
+    title: title,
+    message: baseMessage,
+    extraHtml: extraHtml
+  };
+}
+
 /**
  * Single Truth Function for Rule Evaluation
  * @param {string} currentDomain 
@@ -44,10 +76,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
           isCurfewActive = (currentTimeStr >= c.start_time || currentTimeStr < c.end_time);
         }
         if (isCurfewActive && c.strict_mode) {
-          return {
-            title: 'Curfew Active',
-            message: c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.'
-          };
+          return buildBlockResponse('Curfew Active', c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.', c);
         }
       }
     }
@@ -61,10 +90,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
         if (rule.action === 'allow') return null; // whitelist bypass
         if (!checkSchedule(rule)) continue;
         if (rule.action === 'block' || (rule.action === 'limit' && usage[d] >= rule.limit_mins)) {
-          return {
-            title: 'Website Blocked',
-            message: rule.message || payload.messages?.domain_default || 'This specific website has been blocked.'
-          };
+          return buildBlockResponse('Website Blocked', rule.message || payload.messages?.domain_default || 'This specific website has been blocked.', rule);
         }
       }
     }
@@ -80,10 +106,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
         if (rule.action === 'allow') return null;
         if (!checkSchedule(rule)) continue;
         if (rule.action === 'block' || (rule.action === 'limit' && usage[rule.pattern] >= rule.limit_mins)) {
-          return {
-            title: 'Website Blocked',
-            message: rule.message || payload.messages?.domain_default || 'This specific website has been blocked.'
-          };
+          return buildBlockResponse('Website Blocked', rule.message || payload.messages?.domain_default || 'This specific website has been blocked.', rule);
         }
       }
     }
@@ -97,10 +120,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
       if (rule.action === 'allow') return null;
       if (!checkSchedule(rule)) return null;
       if (rule.action === 'block' || (rule.action === 'limit' && usage['cat_' + category] >= rule.limit_mins)) {
-        return {
-          title: 'Category Restricted',
-          message: rule.message || payload.messages?.category_default || 'This app category is restricted right now.'
-        };
+        return buildBlockResponse('Category Restricted', rule.message || payload.messages?.category_default || 'This app category is restricted right now.', rule);
       }
     }
   }
@@ -141,11 +161,11 @@ async function enforceRules() {
   
   const blockData = shouldBlock(window.location.hostname, payload, data.daily_usage);
   if (blockData) {
-    showOverlayBlocker(blockData.title, blockData.message);
+    showOverlayBlocker(blockData.title, blockData.message, blockData.extraHtml);
   }
 }
 
-function showOverlayBlocker(title, message) {
+function showOverlayBlocker(title, message, extraHtml = '') {
   // Prevent scrolling on the underlying page
   document.documentElement.style.overflow = 'hidden';
   
@@ -173,6 +193,7 @@ function showOverlayBlocker(title, message) {
       <div style="font-size: 64px; margin-bottom: 20px; color: #FF3B30;">🔒</div>
       <h1 style="margin: 0 0 10px 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">${title}</h1>
       <p style="font-size: 16px; color: #A1A1A6; line-height: 1.6; margin: 0;">${message}</p>
+      <div id="oikos-extra-html">${extraHtml}</div>
     </div>
   `;
 
@@ -211,12 +232,15 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         overlay.remove();
         document.documentElement.style.overflow = '';
       } else if (blockData && !overlay) {
-        showOverlayBlocker(blockData.title, blockData.message);
+        showOverlayBlocker(blockData.title, blockData.message, blockData.extraHtml);
       } else if (blockData && overlay) {
-        // Update message if it changed
         const msgEl = overlay.querySelector('p');
         if (msgEl && msgEl.innerText !== blockData.message) {
           msgEl.innerText = blockData.message;
+        }
+        const extraContainer = overlay.querySelector('#oikos-extra-html');
+        if (extraContainer) {
+          extraContainer.innerHTML = blockData.extraHtml || '';
         }
       }
     });
@@ -238,7 +262,16 @@ setInterval(() => {
       overlay.remove();
       document.documentElement.style.overflow = '';
     } else if (blockData && !overlay) {
-      showOverlayBlocker(blockData.title, blockData.message);
+      showOverlayBlocker(blockData.title, blockData.message, blockData.extraHtml);
+    } else if (blockData && overlay) {
+      const msgEl = overlay.querySelector('p');
+      if (msgEl && msgEl.innerText !== blockData.message) {
+        msgEl.innerText = blockData.message;
+      }
+      const extraContainer = overlay.querySelector('#oikos-extra-html');
+      if (extraContainer) {
+        extraContainer.innerHTML = blockData.extraHtml || '';
+      }
     }
   });
 }, 60000);
