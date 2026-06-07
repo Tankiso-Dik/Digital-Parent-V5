@@ -131,7 +131,7 @@ async function renderScreenControlDashboard(grid, user) {
   urlCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Precision control for specific websites.</p>
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-      <input type="text" id="new-url-input" class="input" placeholder="e.g. *.discord.com" style="flex: 1;">
+      <input type="text" id="new-url-input" class="input" placeholder="e.g. discord.com" style="flex: 1;">
       <button class="btn btn--secondary" id="pick-app-btn" title="Pick an App from a List" style="padding: 0 16px; font-size: 16px; border: 1px solid var(--color-border-subtle); background: var(--bg-card); color: var(--text-main); border-radius: 8px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center;">🔍</button>
       <button class="btn btn--primary" id="add-url-btn">Configure Block</button>
     </div>
@@ -139,10 +139,10 @@ async function renderScreenControlDashboard(grid, user) {
 
   urlCard.querySelector('#pick-app-btn').onclick = () => {
     const apps = [
-      { cat: 'Social Media', list: [ {name:'YouTube', url:'*.youtube.com', icon:'📺'}, {name:'TikTok', url:'*.tiktok.com', icon:'📱'}, {name:'Instagram', url:'*.instagram.com', icon:'📸'}, {name:'Snapchat', url:'*.snapchat.com', icon:'👻'}, {name:'Facebook', url:'*.facebook.com', icon:'📘'}, {name:'Reddit', url:'*.reddit.com', icon:'👽'} ] },
-      { cat: 'Gaming', list: [ {name:'Roblox', url:'*.roblox.com', icon:'🎮'}, {name:'Minecraft', url:'*.minecraft.net', icon:'⛏️'}, {name:'Twitch', url:'*.twitch.tv', icon:'👾'}, {name:'Fortnite', url:'*.fortnite.com', icon:'🏆'}, {name:'Steam', url:'*.steampowered.com', icon:'🚂'} ] },
-      { cat: 'Entertainment', list: [ {name:'Netflix', url:'*.netflix.com', icon:'🍿'}, {name:'Spotify', url:'*.spotify.com', icon:'🎵'}, {name:'Disney+', url:'*.disneyplus.com', icon:'🏰'}, {name:'Hulu', url:'*.hulu.com', icon:'🎬'} ] },
-      { cat: 'Communication', list: [ {name:'Discord', url:'*.discord.com', icon:'💬'}, {name:'WhatsApp', url:'*.whatsapp.com', icon:'📞'}, {name:'Zoom', url:'*.zoom.us', icon:'📹'} ] }
+      { cat: 'Social Media', list: [ {name:'YouTube', url:'youtube.com', icon:'📺'}, {name:'TikTok', url:'tiktok.com', icon:'📱'}, {name:'Instagram', url:'instagram.com', icon:'📸'}, {name:'Snapchat', url:'snapchat.com', icon:'👻'}, {name:'Facebook', url:'facebook.com', icon:'📘'}, {name:'Reddit', url:'reddit.com', icon:'👽'} ] },
+      { cat: 'Gaming', list: [ {name:'Roblox', url:'roblox.com', icon:'🎮'}, {name:'Minecraft', url:'minecraft.net', icon:'⛏️'}, {name:'Twitch', url:'twitch.tv', icon:'👾'}, {name:'Fortnite', url:'fortnite.com', icon:'🏆'}, {name:'Steam', url:'steampowered.com', icon:'🚂'} ] },
+      { cat: 'Entertainment', list: [ {name:'Netflix', url:'netflix.com', icon:'🍿'}, {name:'Spotify', url:'spotify.com', icon:'🎵'}, {name:'Disney+', url:'disneyplus.com', icon:'🏰'}, {name:'Hulu', url:'hulu.com', icon:'🎬'} ] },
+      { cat: 'Communication', list: [ {name:'Discord', url:'discord.com', icon:'💬'}, {name:'WhatsApp', url:'whatsapp.com', icon:'📞'}, {name:'Zoom', url:'zoom.us', icon:'📹'} ] }
     ];
 
     const pickerModal = document.createElement('div');

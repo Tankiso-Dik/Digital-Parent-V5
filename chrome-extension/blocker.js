@@ -5,12 +5,20 @@ function checkSchedule(rule) {
   if (!rule.start_time || !rule.end_time || !rule.days) return true; // No schedule, always active
   const now = new Date();
   const currentDay = now.getDay() === 0 ? 7 : now.getDay();
-  if (!rule.days.includes(currentDay)) return false;
   const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  
   if (rule.start_time < rule.end_time) {
+    if (!rule.days.includes(currentDay)) return false;
     return (currentTimeStr >= rule.start_time && currentTimeStr < rule.end_time);
   } else {
-    return (currentTimeStr >= rule.start_time || currentTimeStr < rule.end_time);
+    // Overnight rule
+    if (currentTimeStr >= rule.start_time) {
+      return rule.days.includes(currentDay);
+    } else if (currentTimeStr < rule.end_time) {
+      const yesterday = currentDay === 1 ? 7 : currentDay - 1;
+      return rule.days.includes(yesterday);
+    }
+    return false;
   }
 }
 
@@ -34,16 +42,11 @@ function buildBlockResponse(title, baseMessage, rule) {
   } else if (rule && rule.action === 'limit') {
     extraHtml = `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
       <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.5); margin-bottom: 4px;">Time Remaining</div>
-      <div style="font-size: 20px; font-weight: bold; color: #FF3B30;">0m</div>
-      <div style="font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px;">Daily limit of ${rule.limit_mins}m reached.</div>
+      <div style="font-size: 20px; font-weight: bold; color: white;">Time's Up</div>
     </div>`;
   }
-
-  return {
-    title: title,
-    message: baseMessage,
-    extraHtml: extraHtml
-  };
+  
+  return { title, message: baseMessage, extraHtml };
 }
 
 /**
@@ -63,21 +66,9 @@ function shouldBlock(currentDomain, payload, usageObj) {
 
   // 1. Curfew Check (Highest Priority)
   if (payload.curfews && payload.curfews.length > 0) {
-    const now = new Date();
-    const currentDay = now.getDay() === 0 ? 7 : now.getDay();
-    const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    
     for (const c of payload.curfews) {
-      if (c.days.includes(currentDay)) {
-        let isCurfewActive = false;
-        if (c.start_time < c.end_time) {
-          isCurfewActive = (currentTimeStr >= c.start_time && currentTimeStr < c.end_time);
-        } else {
-          isCurfewActive = (currentTimeStr >= c.start_time || currentTimeStr < c.end_time);
-        }
-        if (isCurfewActive && c.strict_mode) {
-          return buildBlockResponse('Curfew Active', c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.', c);
-        }
+      if (checkSchedule(c) && c.strict_mode) {
+        return buildBlockResponse('Curfew Active', c.message_override || payload.messages?.curfew_default || 'Device is locked for the night.', c);
       }
     }
   }
