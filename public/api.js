@@ -247,7 +247,7 @@ setInterval(async () => {
           const expectedData = await expectedRes.json();
           const missed = (expectedData.data || []).find(c => c.status === 'missed');
           if (missed) {
-             lockMessage = \`Your check in for \${missed.zone_name} arrival is expected. Please share your location to confirm.\`;
+             lockMessage = `Your check in for ${missed.zone_name} arrival is expected. Please share your location to confirm.`;
           }
        }
 
