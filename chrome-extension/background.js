@@ -59,7 +59,7 @@ async function updateDailyUsage() {
     }
     if (data.rules_payload.rules.wildcards) {
       for (const w of data.rules_payload.rules.wildcards) {
-        const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+        const regexStr = '^' + (w.pattern.startsWith('*.') ? '(.*\\.)?' + w.pattern.substring(2).replace(/\./g, '\\.') : w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')) + '$';
         if (new RegExp(regexStr).test(domain)) {
           daily.usage[w.pattern] = (daily.usage[w.pattern] || 0) + deltaMins;
         }
@@ -107,7 +107,7 @@ function checkLimits(domain, category, usage, payload) {
   
   if (payload.rules.wildcards) {
     for (const w of payload.rules.wildcards) {
-      const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+      const regexStr = '^' + (w.pattern.startsWith('*.') ? '(.*\\.)?' + w.pattern.substring(2).replace(/\./g, '\\.') : w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')) + '$';
       if (new RegExp(regexStr).test(domain)) {
         if (w.action !== 'allow' && checkSchedule(w)) {
           if (w.action === 'block' || (w.action === 'limit' && usage[w.pattern] >= w.limit_mins)) block = true;

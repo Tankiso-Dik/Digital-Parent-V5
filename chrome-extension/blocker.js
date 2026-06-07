@@ -99,7 +99,7 @@ function shouldBlock(currentDomain, payload, usageObj) {
   // 3. Wildcard Match
   if (payload.rules.wildcards) {
     for (const w of payload.rules.wildcards) {
-      const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+      const regexStr = '^' + (w.pattern.startsWith('*.') ? '(.*\\.)?' + w.pattern.substring(2).replace(/\./g, '\\.') : w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')) + '$';
       const regex = new RegExp(regexStr);
       if (regex.test(currentDomain)) {
         const rule = w;
@@ -146,7 +146,7 @@ function getActiveLimitTracker(currentDomain, payload, usageObj) {
 
   if (payload.rules.wildcards) {
     for (const w of payload.rules.wildcards) {
-      const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+      const regexStr = '^' + (w.pattern.startsWith('*.') ? '(.*\\.)?' + w.pattern.substring(2).replace(/\./g, '\\.') : w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')) + '$';
       if (new RegExp(regexStr).test(currentDomain)) {
         const rule = w;
         if (rule.action === 'limit' && checkSchedule(rule)) {

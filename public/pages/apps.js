@@ -61,7 +61,8 @@ export async function render(container, { user }) {
       }
       if (rulesPayload.wildcards) {
         for (const w of rulesPayload.wildcards) {
-          const regexStr = '^' + w.pattern.toLowerCase().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+          const p = w.pattern.toLowerCase();
+          const regexStr = '^' + (p.startsWith('*.') ? '(.*\\.)?' + p.substring(2).replace(/\./g, '\\.') : p.replace(/\./g, '\\.').replace(/\*/g, '.*')) + '$';
           if (new RegExp(regexStr).test(appNameLower)) {
             return formatBadge(w);
           }
