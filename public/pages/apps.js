@@ -27,8 +27,31 @@ export async function render(container, { user }) {
   wrapper.appendChild(header);
 
   try {
-    const res = await apiFetch('/app-usage/analytics');
+    const [res, rulesRes] = await Promise.all([
+      apiFetch('/app-usage/analytics'),
+      apiFetch('/rules/sync')
+    ]);
     const { topApps, categoryStats, dailyStats } = res.data;
+    const rulesPayload = rulesRes.data?.rules || null;
+
+    const getAppBadge = (appName) => {
+      if (!rulesPayload) return '';
+      if (rulesPayload.domains && rulesPayload.domains[appName]) {
+        const r = rulesPayload.domains[appName];
+        if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
+        if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
+      }
+      if (rulesPayload.wildcards) {
+        for (const w of rulesPayload.wildcards) {
+          const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+          if (new RegExp(regexStr).test(appName)) {
+            if (w.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
+            if (w.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${w.limit_mins}m</span>`;
+          }
+        }
+      }
+      return '';
+    };
 
     // Calculate total today (using first item in dailyStats if it matches today)
     const today = new Date().toISOString().slice(0, 10);
@@ -103,6 +126,7 @@ export async function render(container, { user }) {
           <div style="display: flex; align-items: center; gap: 10px;">
             <div style="width: 24px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">${i+1}</div>
             <span style="font-weight: 500;">${app.app_name}</span>
+            ${getAppBadge(app.app_name)}
           </div>
           <span style="font-weight: 600; font-size: 14px; color: var(--color-primary);">${formatDuration(app.total_duration)}</span>
         </div>
@@ -129,7 +153,10 @@ export async function render(container, { user }) {
       logsHtml += `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
           <div>
-            <div style="font-weight: 500; margin-bottom: 4px;">${log.app_name}</div>
+            <div style="font-weight: 500; margin-bottom: 4px; display: flex; align-items: center;">
+              ${log.app_name}
+              ${getAppBadge(log.app_name)}
+            </div>
             <div style="font-size: 12px; color: var(--text-secondary);">${log.category_name || 'Uncategorized'} • ${timeStr}</div>
           </div>
           <div style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
