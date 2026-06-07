@@ -414,7 +414,7 @@ async function renderScreenControlDashboard(grid, user) {
       <h4 style="margin: 0 0 16px 0; color: var(--color-success); display: flex; align-items: center; gap: 8px;"><i data-lucide="activity"></i> Active Enforcement</h4>
       <ul style="margin: 0; padding-left: 20px; color: var(--text-main); font-size: 14px; line-height: 1.8;">
         <li><strong>${rulesData.blocked_rules.filter(r=>r.type==='category').length}</strong> Category rules</li>
-        <li><strong>${urlRules.length}</strong> URL rules</li>
+        <li><strong>${rulesData.blocked_rules.filter(r => r.type === 'domain' || r.type === 'wildcard').length}</strong> URL rules</li>
         <li><strong>${rulesData.curfews.length}</strong> active Curfews</li>
       </ul>
       <button class="btn btn--success" id="sync-rules-btn" style="width: 100%; margin-top: 20px; box-shadow: 0 4px 12px rgba(52,199,89,0.3);">Sync Rules to Extension</button>
