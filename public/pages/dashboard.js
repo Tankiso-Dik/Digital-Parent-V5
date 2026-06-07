@@ -132,9 +132,57 @@ async function renderScreenControlDashboard(grid, user) {
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Precision control for specific websites.</p>
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
       <input type="text" id="new-url-input" class="input" placeholder="e.g. *.discord.com" style="flex: 1;">
+      <button class="btn btn--secondary" id="pick-app-btn" title="Pick an App from a List" style="padding: 0 16px; font-size: 16px; border: 1px solid var(--color-border-subtle); background: var(--bg-card); color: var(--text-main); border-radius: 8px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center;">🔍</button>
       <button class="btn btn--primary" id="add-url-btn">Configure Block</button>
     </div>
   `;
+
+  urlCard.querySelector('#pick-app-btn').onclick = () => {
+    const apps = [
+      { cat: 'Social Media', list: [ {name:'YouTube', url:'*.youtube.com', icon:'📺'}, {name:'TikTok', url:'*.tiktok.com', icon:'📱'}, {name:'Instagram', url:'*.instagram.com', icon:'📸'}, {name:'Snapchat', url:'*.snapchat.com', icon:'👻'}, {name:'Facebook', url:'*.facebook.com', icon:'📘'}, {name:'Reddit', url:'*.reddit.com', icon:'👽'} ] },
+      { cat: 'Gaming', list: [ {name:'Roblox', url:'*.roblox.com', icon:'🎮'}, {name:'Minecraft', url:'*.minecraft.net', icon:'⛏️'}, {name:'Twitch', url:'*.twitch.tv', icon:'👾'}, {name:'Fortnite', url:'*.fortnite.com', icon:'🏆'}, {name:'Steam', url:'*.steampowered.com', icon:'🚂'} ] },
+      { cat: 'Entertainment', list: [ {name:'Netflix', url:'*.netflix.com', icon:'🍿'}, {name:'Spotify', url:'*.spotify.com', icon:'🎵'}, {name:'Disney+', url:'*.disneyplus.com', icon:'🏰'}, {name:'Hulu', url:'*.hulu.com', icon:'🎬'} ] },
+      { cat: 'Communication', list: [ {name:'Discord', url:'*.discord.com', icon:'💬'}, {name:'WhatsApp', url:'*.whatsapp.com', icon:'📞'}, {name:'Zoom', url:'*.zoom.us', icon:'📹'} ] }
+    ];
+
+    const pickerModal = document.createElement('div');
+    pickerModal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    
+    let contentHtml = '<div style="background: #ffffff; color: #333333; width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto; padding: 24px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid #e2e8f0;">';
+    contentHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;"><h3 style="margin:0; font-size:20px; color: #000;">Select an App</h3><button id="close-picker-btn" style="background:none;border:none;font-size:24px;cursor:pointer;color:#888;">&times;</button></div>';
+    
+    apps.forEach(group => {
+      contentHtml += `<h4 style="margin: 16px 0 8px 0; color: #666; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 4px;">${group.cat}</h4>`;
+      contentHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;">`;
+      group.list.forEach(app => {
+        contentHtml += `
+          <button class="app-picker-item" data-url="${app.url}" style="display: flex; flex-direction: column; align-items: center; gap: 6px; background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; cursor: pointer; transition: all 0.2s;">
+            <span style="font-size: 28px;">${app.icon}</span>
+            <span style="font-size: 13px; font-weight: 500; color: #111;">${app.name}</span>
+          </button>
+        `;
+      });
+      contentHtml += `</div>`;
+    });
+    
+    contentHtml += '</div>';
+    pickerModal.innerHTML = contentHtml;
+    document.body.appendChild(pickerModal);
+
+    pickerModal.querySelector('#close-picker-btn').onclick = () => pickerModal.remove();
+    pickerModal.addEventListener('click', (e) => {
+      if (e.target === pickerModal) pickerModal.remove();
+    });
+
+    pickerModal.querySelectorAll('.app-picker-item').forEach(btn => {
+      btn.onclick = () => {
+        urlCard.querySelector('#new-url-input').value = btn.getAttribute('data-url');
+        pickerModal.remove();
+      };
+      btn.onmouseover = () => btn.style.background = 'rgba(255,255,255,0.1)';
+      btn.onmouseout = () => btn.style.background = 'rgba(255,255,255,0.05)';
+    });
+  };
 
   urlCard.querySelector('#add-url-btn').onclick = async () => {
     const val = urlCard.querySelector('#new-url-input').value.trim();
@@ -145,49 +193,49 @@ async function renderScreenControlDashboard(grid, user) {
     const modal = document.createElement('div');
     modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 9999;';
     modal.innerHTML = `
-      <div style="background: var(--bg-card); width: 400px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--color-border-subtle);">
-        <h3 style="margin: 0 0 16px 0; font-size: 20px;">Block <span style="font-family: monospace; color: var(--color-primary);">${val}</span></h3>
-        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">How would you like to restrict this website?</p>
+      <div style="background: #ffffff; color: #333333; width: 400px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid #e2e8f0;">
+        <h3 style="margin: 0 0 16px 0; font-size: 20px; color: #000;">Block <span style="font-family: monospace; color: var(--color-primary);">${val}</span></h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">How would you like to restrict this website?</p>
         
         <label style="display: flex; gap: 12px; margin-bottom: 12px; cursor: pointer;">
           <input type="radio" name="url-block-type" value="permanent" checked style="margin-top: 4px;">
           <div>
-            <strong>Permanent Block</strong>
-            <div style="font-size: 12px; color: var(--text-muted);">Website will be completely blocked 24/7.</div>
+            <strong style="color: #111;">Permanent Block</strong>
+            <div style="font-size: 12px; color: #666;">Website will be completely blocked 24/7.</div>
           </div>
         </label>
         
         <label style="display: flex; gap: 12px; margin-bottom: 12px; cursor: pointer;">
           <input type="radio" name="url-block-type" value="limit" style="margin-top: 4px;">
           <div>
-            <strong>Daily Time Limit</strong>
-            <div style="font-size: 12px; color: var(--text-muted);">Website is allowed for a set amount of time per day.</div>
+            <strong style="color: #111;">Daily Time Limit</strong>
+            <div style="font-size: 12px; color: #666;">Website is allowed for a set amount of time per day.</div>
           </div>
         </label>
         
         <label style="display: flex; gap: 12px; margin-bottom: 16px; cursor: pointer;">
           <input type="radio" name="url-block-type" value="scheduled" style="margin-top: 4px;">
           <div>
-            <strong>Scheduled Window</strong>
-            <div style="font-size: 12px; color: var(--text-muted);">Website is only blocked during specific times.</div>
+            <strong style="color: #111;">Scheduled Window</strong>
+            <div style="font-size: 12px; color: #666;">Website is only blocked during specific times.</div>
           </div>
         </label>
         
-        <div id="url-limit-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+        <div id="url-limit-inputs" style="display: none; background: #f8f9fa; border: 1px solid #e2e8f0; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
           <div style="display: flex; gap: 8px;">
-            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Hours</label><input type="number" id="url-limit-hrs" class="input" style="width: 100%; margin-top: 4px;" value="1" min="0"></div>
-            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Minutes</label><input type="number" id="url-limit-mins" class="input" style="width: 100%; margin-top: 4px;" value="0" min="0" max="59"></div>
-            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Seconds</label><input type="number" id="url-limit-secs" class="input" style="width: 100%; margin-top: 4px;" value="0" min="0" max="59"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: #666;">Hours</label><input type="number" id="url-limit-hrs" class="input" style="width: 100%; margin-top: 4px; background: white; color: black; border: 1px solid #ccc;" value="1" min="0"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: #666;">Minutes</label><input type="number" id="url-limit-mins" class="input" style="width: 100%; margin-top: 4px; background: white; color: black; border: 1px solid #ccc;" value="0" min="0" max="59"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: #666;">Seconds</label><input type="number" id="url-limit-secs" class="input" style="width: 100%; margin-top: 4px; background: white; color: black; border: 1px solid #ccc;" value="0" min="0" max="59"></div>
           </div>
         </div>
 
-        <div id="url-schedule-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+        <div id="url-schedule-inputs" style="display: none; background: #f8f9fa; border: 1px solid #e2e8f0; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
           <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Start Time</label><input type="time" id="url-start" class="input" style="width:100%;" value="15:00"></div>
-            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">End Time</label><input type="time" id="url-end" class="input" style="width:100%;" value="17:00"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: #666;">Start Time</label><input type="time" id="url-start" class="input" style="width:100%; background: white; color: black; border: 1px solid #ccc;" value="15:00"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: #666;">End Time</label><input type="time" id="url-end" class="input" style="width:100%; background: white; color: black; border: 1px solid #ccc;" value="17:00"></div>
           </div>
-          <input type="text" id="url-days" class="input" placeholder="Days (1=Mon, 7=Sun)" style="width: 100%; margin-bottom: 8px;" value="[1,2,3,4,5]">
-          <select id="url-preset-msgs" class="input" style="width: 100%; margin-bottom: 8px;">
+          <input type="text" id="url-days" class="input" placeholder="Days (1=Mon, 7=Sun)" style="width: 100%; margin-bottom: 8px; background: white; color: black; border: 1px solid #ccc;" value="[1,2,3,4,5]">
+          <select id="url-preset-msgs" class="input" style="width: 100%; margin-bottom: 8px; background: white; color: black; border: 1px solid #ccc;">
             <option value="">-- Choose a Preset Message --</option>
             <option value="Time to do your homework!">Time to do your homework!</option>
             <option value="Focus time. No distractions.">Focus time. No distractions.</option>
@@ -197,11 +245,11 @@ async function renderScreenControlDashboard(grid, user) {
             <option value="Bedtime schedule is active.">Bedtime schedule is active.</option>
             <option value="Family time. Please disconnect.">Family time. Please disconnect.</option>
           </select>
-          <input type="text" id="url-msg" class="input" placeholder="Or type a custom message..." style="width: 100%;">
+          <input type="text" id="url-msg" class="input" placeholder="Or type a custom message..." style="width: 100%; background: white; color: black; border: 1px solid #ccc;">
         </div>
         
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
-          <button id="url-cancel-btn" class="btn" style="background: var(--bg-body); color: var(--text-main);">Cancel</button>
+          <button id="url-cancel-btn" class="btn" style="background: #f1f3f5; color: #111; border: 1px solid #ddd;">Cancel</button>
           <button id="url-save-btn" class="btn btn--primary">Save Block Rule</button>
         </div>
       </div>
