@@ -1969,6 +1969,34 @@ const MIGRATIONS = [
       ALTER TABLE event_completions ADD COLUMN is_confirmed INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 56,
+    description: 'Add location events table for arrival/departure tracking',
+    up: `
+      CREATE TABLE IF NOT EXISTS location_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL, -- 'arrived' or 'left'
+        zone_name TEXT NOT NULL,
+        timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_location_events_user ON location_events(user_id);
+    `,
+  },
+  {
+    version: 57,
+    description: 'Add expected checkins table',
+    up: `
+      CREATE TABLE IF NOT EXISTS expected_checkins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        zone_name TEXT NOT NULL,
+        expected_time TEXT NOT NULL, -- Format HH:MM
+        days_of_week TEXT NOT NULL DEFAULT '[1,2,3,4,5]',
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+    `,
+  },
 ];
 
 /**

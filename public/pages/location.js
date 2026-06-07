@@ -31,6 +31,11 @@ export async function render(container, { user }) {
   layout.appendChild(sidebar);
   wrapper.appendChild(layout);
 
+  const insightsContainer = document.createElement('div');
+  insightsContainer.id = 'insights-container';
+  insightsContainer.style.cssText = 'margin-top: 20px;';
+  if (isParent) wrapper.appendChild(insightsContainer);
+
   container.replaceChildren(wrapper);
 
   // Dynamically load Leaflet if not present
@@ -101,6 +106,101 @@ export async function render(container, { user }) {
     }
   }
 
+  async function loadInsights() {
+    if (!isParent) return;
+    try {
+      const res = await apiFetch('/location/insights');
+      const { mostVisited, recent } = res.data || {};
+      
+      let html = '<div style="display:flex; gap:20px; flex-wrap:wrap;">';
+      
+      // Most visited
+      html += '<div class="card card--padded glass" style="flex:1; min-width:300px;">';
+      html += '<h3>🔥 Most Visited Areas</h3>';
+      html += '<ul style="list-style:none; padding:0; margin-top:10px;">';
+      if (!mostVisited || mostVisited.length === 0) {
+         html += '<li style="color:var(--text-muted); font-size:13px;">No data yet.</li>';
+      } else {
+         mostVisited.forEach(v => {
+           html += `<li style="padding:8px 0; border-bottom:1px solid var(--color-border-subtle); display:flex; justify-content:space-between; align-items:center;">
+             <span><b>${v.display_name}</b> <span style="color:var(--text-secondary); font-size:12px;">in ${v.zone_name}</span></span>
+             <span class="badge badge--neutral">${v.visits} visits</span>
+           </li>`;
+         });
+      }
+      html += '</ul></div>';
+
+      // Recent areas
+      html += '<div class="card card--padded glass" style="flex:1; min-width:300px;">';
+      html += '<h3>⏱️ Recently Seen In</h3>';
+      html += '<ul style="list-style:none; padding:0; margin-top:10px;">';
+      if (!recent || recent.length === 0) {
+         html += '<li style="color:var(--text-muted); font-size:13px;">No data yet.</li>';
+      } else {
+         recent.forEach(r => {
+           html += `<li style="padding:8px 0; border-bottom:1px solid var(--color-border-subtle); display:flex; justify-content:space-between; align-items:center;">
+             <span><b>${r.display_name}</b> <span style="color:var(--text-secondary); font-size:12px;">in ${r.zone_name}</span></span>
+             <span style="font-size:12px; color:var(--text-muted);">${timeAgo(r.last_seen)}</span>
+           </li>`;
+         });
+      }
+      html += '</ul></div>';
+
+      html += '</div>';
+      insightsContainer.innerHTML = html;
+    } catch(e) {
+      console.error('Failed to load insights', e);
+    }
+  }
+
+  async function loadExpectedCheckins() {
+    if (!isParent) return;
+    try {
+      const res = await apiFetch('/location/expected');
+      const expectedListEl = container.querySelector('#expected-list');
+      if (expectedListEl && res.data) {
+        expectedListEl.innerHTML = '';
+        if (res.data.length === 0) {
+          expectedListEl.innerHTML = '<div style="color:var(--text-muted);">No expected check-ins set.</div>';
+        } else {
+          res.data.forEach(ec => {
+            const el = document.createElement('div');
+            el.className = 'glass';
+            el.style.cssText = 'padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;';
+            
+            let statusIcon = '⚪';
+            if (ec.status === 'arrived') statusIcon = '✅';
+            else if (ec.status === 'missed') statusIcon = '❌';
+            else if (ec.status === 'not_today') statusIcon = '💤';
+            
+            el.innerHTML = `
+              <div style="flex:1;">
+                <b>${ec.display_name}</b> at <b>${ec.zone_name}</b><br>
+                <span style="color:var(--text-muted); font-size: 11px;">By ${ec.expected_time} | Status: ${statusIcon}</span>
+              </div>
+            `;
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn--ghost btn--sm';
+            delBtn.innerHTML = '🗑️';
+            delBtn.style.color = 'var(--color-danger)';
+            delBtn.onclick = async () => {
+              if(confirm('Delete expected check-in?')) {
+                try {
+                  await apiFetch('/location/expected/' + ec.id, {method:'DELETE'});
+                  loadExpectedCheckins();
+                }catch(e){ showToast('Error deleting', 'error'); }
+              }
+            };
+            el.appendChild(delBtn);
+            expectedListEl.appendChild(el);
+          });
+        }
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
   function renderZones() {
     if(map) zoneMarkers.forEach(m => { if(map) map.removeLayer(m); });
     zoneMarkers.length = 0;
@@ -111,12 +211,22 @@ export async function render(container, { user }) {
       if (z.zone_type === 'danger') color = 'red';
       
       if (window.L) {
-        const circle = window.L.circle([z.lat, z.lng], { color, radius: z.radius || 250, fillOpacity: 0.2 });
+        const circle = window.L.circle([z.lat, z.lng], { color, radius: Number(z.radius) || 250, fillOpacity: 0.2 });
         circle.addTo(map).bindPopup(`<b>${z.name}</b><br>${z.zone_type.toUpperCase()}`);
         zoneMarkers.push(circle);
       }
     });
   }
+
+function timeAgo(dateString) {
+  const diff = Date.now() - new Date(dateString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hours ago`;
+  return `${Math.floor(hrs / 24)} days ago`;
+}
 
   function renderSidebar() {
     sidebar.innerHTML = '';
@@ -129,14 +239,78 @@ export async function render(container, { user }) {
         </p>
         <div id="zones-list" style="margin-bottom: 20px;"></div>
         <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--color-border-subtle);">
-        <h3>👀 Children Status</h3>
+        
+        <h3>👀 Safety Status</h3>
         <button id="request-location-btn" class="btn btn--secondary btn--sm" style="width: 100%; margin-bottom: 15px; font-size: 14px;">
           <i data-lucide="map-pin"></i> Request Location Update
         </button>
         <div id="child-status-list">Waiting for updates...</div>
+        
+        <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--color-border-subtle);">
+
+        <h3>⏰ Expected Check-ins</h3>
+        <p class="text-secondary" style="font-size: var(--text-sm); margin-bottom: 10px;">
+          Get alerted if your child misses an expected arrival time.
+        </p>
+        <button id="add-expected-btn" class="btn btn--secondary btn--sm" style="width: 100%; margin-bottom: 10px;">
+          <i data-lucide="clock"></i> Add Expected Check-in
+        </button>
+        <div id="expected-list" style="margin-bottom: 15px; font-size: 13px;">Loading expected check-ins...</div>
+
+        <hr style="margin: 15px 0; border: none; border-top: 1px solid var(--color-border-subtle);">
+        
+        <h3>⏱️ Recent Events</h3>
+        <div id="events-list" style="font-size: 13px;">Loading events...</div>
       `;
       
       if (window.lucide) window.lucide.createIcons({ el: sidebar });
+
+      const addExpectedBtn = sidebar.querySelector('#add-expected-btn');
+      if (addExpectedBtn) {
+        addExpectedBtn.onclick = async () => {
+          if (familyZones.length === 0) {
+             alert('Please define a Family Zone first!');
+             return;
+          }
+          try {
+             const membersRes = await apiFetch('/family/members');
+             const children = (membersRes.data || []).filter(m => m.family_role === 'child');
+             if (children.length === 0) {
+                alert('No children found in the family.');
+                return;
+             }
+             
+             let childOptions = children.map((c, i) => `${i}: ${c.display_name}`).join('\n');
+             const childIdxStr = prompt(`Select child by number:\n${childOptions}`);
+             if (!childIdxStr) return;
+             const childIdx = parseInt(childIdxStr);
+             if (isNaN(childIdx) || !children[childIdx]) return;
+             
+             let zoneOptions = familyZones.map((z, i) => `${i}: ${z.name}`).join('\n');
+             const zoneIdxStr = prompt(`Select zone by number:\n${zoneOptions}`);
+             if (!zoneIdxStr) return;
+             const zoneIdx = parseInt(zoneIdxStr);
+             if (isNaN(zoneIdx) || !familyZones[zoneIdx]) return;
+             
+             const expectedTime = prompt('Expected time (HH:MM) e.g. 15:30:');
+             if (!expectedTime || !/^\d\d:\d\d$/.test(expectedTime)) return;
+             
+             await apiFetch('/location/expected', {
+                method: 'POST',
+                body: JSON.stringify({
+                  user_id: children[childIdx].id,
+                  zone_name: familyZones[zoneIdx].name,
+                  expected_time: expectedTime,
+                  days_of_week: [1,2,3,4,5]
+                })
+             });
+             showToast('Expected check-in added!', 'success');
+             loadExpectedCheckins();
+          } catch(e) {
+             showToast('Error adding check-in', 'error');
+          }
+        };
+      }
 
       const requestLocBtn = sidebar.querySelector('#request-location-btn');
       if (requestLocBtn) {
@@ -298,7 +472,7 @@ export async function render(container, { user }) {
 
           familyZones.forEach(z => {
             const distance = map ? map.distance([lat, lng], [z.lat, z.lng]) : Infinity;
-            if (distance < 250 && distance < minDistance) {
+            if (distance < (z.radius || 250) && distance < minDistance) {
               minDistance = distance;
               closestZone = z;
             }
@@ -410,19 +584,33 @@ export async function render(container, { user }) {
         statusListEl.innerHTML = '';
         data.forEach(loc => {
           const isDanger = loc.location_type === 'danger';
-          const isUnknown = loc.location_type === 'unknown' || !loc.location_type;
-          const displayType = loc.zone_name || (isUnknown ? 'TRANSIT / OUTSIDE ZONES' : loc.location_type.toUpperCase());
+          const isSafe = loc.location_type === 'safe' || loc.location_type === 'school' || loc.location_type === 'home';
+          const isUnknown = loc.location_type === 'unknown' || !loc.location_type || loc.location_type === 'transit';
+          const displayType = loc.zone_name || (isUnknown ? 'Transit / Unknown' : loc.location_type);
+          
+          let icon = '⚪';
+          if (isSafe) icon = '🟢';
+          if (isUnknown) icon = '🟡';
+          if (isDanger) icon = '🔴';
+
+          const minsAgo = Math.floor((Date.now() - new Date(loc.updated_at).getTime()) / 60000);
+          const timeColor = minsAgo > 60 ? 'var(--color-danger)' : (minsAgo > 15 ? 'var(--color-warning)' : 'var(--color-success)');
 
           const item = document.createElement('div');
           item.className = `child-status-item glass ${isDanger ? 'child-status-item--danger' : ''}`;
-          item.style.cssText = 'padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--color-border-subtle); cursor: pointer; transition: all 0.2s;';
+          item.style.cssText = 'padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--color-border-subtle); cursor: pointer; transition: all 0.2s;';
           item.innerHTML = `
-            <div style="display:flex; justify-content: space-between;">
-              <b style="${isDanger ? 'color: var(--color-danger);' : ''}">${loc.display_name}</b>
-              <small class="text-secondary">${new Date(loc.updated_at).toLocaleTimeString()}</small>
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+              <b style="font-size: 15px; ${isDanger ? 'color: var(--color-danger);' : ''}">${loc.display_name}</b>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>${icon}</span>
+                <span style="font-size: 14px; font-weight: 500;">${displayType}</span>
+              </div>
             </div>
-            <div class="text-secondary" style="font-size: 12px; margin-top: 4px;">Zone: ${displayType}</div>
-            <div style="font-size:11px; margin-top:4px; color:var(--color-primary);">Click to view location history</div>
+            <div style="display:flex; justify-content: space-between; margin-top: 8px; align-items: center;">
+              <small style="font-weight: 600; color: ${timeColor};">Last verified: ${timeAgo(loc.updated_at)}</small>
+              <div style="font-size:11px; color:var(--color-primary);">Route History 🗺️</div>
+            </div>
           `;
           item.onmouseenter = () => item.style.transform = 'scale(1.02)';
           item.onmouseleave = () => item.style.transform = 'scale(1)';
@@ -502,6 +690,34 @@ export async function render(container, { user }) {
       }
       
       if (isParent) {
+        const eventsRes = await apiFetch('/location/events').catch(()=>null);
+        if (eventsRes && eventsRes.data) {
+          const eventsListEl = container.querySelector('#events-list');
+          if (eventsListEl) {
+            eventsListEl.innerHTML = '';
+            if (eventsRes.data.length === 0) {
+              eventsListEl.innerHTML = '<div style="color:var(--text-muted);">No recent events</div>';
+            } else {
+              eventsRes.data.slice(0, 10).forEach(ev => {
+                const el = document.createElement('div');
+                el.style.cssText = 'padding: 8px 0; border-bottom: 1px solid var(--glass-border-subtle); display:flex; justify-content:space-between; align-items:center;';
+                
+                const icon = ev.event_type === 'arrived' ? '📥' : '📤';
+                const actionText = ev.event_type === 'arrived' ? 'Arrived at' : 'Left';
+                
+                el.innerHTML = `
+                  <div>
+                    <span style="margin-right: 6px;">${icon}</span>
+                    <b>${ev.display_name}</b> ${actionText} <span style="color: var(--color-primary); font-weight: 500;">${ev.zone_name}</span>
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted);">${new Date(ev.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                `;
+                eventsListEl.appendChild(el);
+              });
+            }
+          }
+        }
+        
         const sosRes = await apiFetch('/reports/emergency').catch(()=>null);
         if (sosRes && sosRes.data) {
           const sos = sosRes.data.filter(e => e.status === 'pending');
@@ -535,9 +751,15 @@ export async function render(container, { user }) {
   }
 
   await loadZones();
+  await loadInsights();
   await refreshLocations();
+  await loadExpectedCheckins();
   
-  const interval = setInterval(refreshLocations, 10000);
+  const interval = setInterval(() => {
+     refreshLocations();
+     loadInsights();
+     loadExpectedCheckins();
+  }, 10000);
   const observer = new MutationObserver(() => {
     if (!document.body.contains(container)) {
       clearInterval(interval);

@@ -28,13 +28,54 @@ router.get('/', (req, res) => {
   }
 });
 
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const p1 = lat1 * Math.PI/180;
+  const p2 = lat2 * Math.PI/180;
+  const dp = (lat2-lat1) * Math.PI/180;
+  const dl = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(dp/2) * Math.sin(dp/2) +
+            Math.cos(p1) * Math.cos(p2) *
+            Math.sin(dl/2) * Math.sin(dl/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 router.post('/', (req, res) => {
   try {
-    const { location_type, lat, lng, zone_name } = req.body;
-    if (!['school', 'park', 'danger', 'safe', 'unknown', 'transit'].includes(location_type)) {
-      return res.status(400).json({ error: 'Invalid location type.' });
-    }
+    const { lat, lng } = req.body;
     
+    // Evaluate zone entirely on the backend
+    const zones = db.get().prepare('SELECT * FROM family_zones').all();
+    let computedZoneName = null;
+    let computedLocationType = 'unknown';
+    let minDistance = Infinity;
+
+    for (const z of zones) {
+      const d = getDistance(lat, lng, z.lat, z.lng);
+      if (d < (z.radius || 250) && d < minDistance) {
+        minDistance = d;
+        computedZoneName = z.name;
+        computedLocationType = z.zone_type;
+      }
+    }
+
+    // Get previous state to detect arrival/departure events
+    const prev = db.get().prepare('SELECT zone_name FROM child_locations WHERE user_id = ?').get(req.authUserId);
+    const prevZone = prev ? prev.zone_name : null;
+
+    if (prevZone !== computedZoneName) {
+      // Zone changed! Record events
+      const insertEvent = db.get().prepare('INSERT INTO location_events (user_id, event_type, zone_name) VALUES (?, ?, ?)');
+      if (prevZone) {
+        insertEvent.run(req.authUserId, 'left', prevZone);
+      }
+      if (computedZoneName) {
+        insertEvent.run(req.authUserId, 'arrived', computedZoneName);
+      }
+    }
+
     db.get().prepare(`
       INSERT INTO child_locations (user_id, location_type, lat, lng, zone_name, updated_at)
       VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -44,12 +85,12 @@ router.post('/', (req, res) => {
         lng = excluded.lng,
         zone_name = excluded.zone_name,
         updated_at = excluded.updated_at
-    `).run(req.authUserId, location_type, lat || 0, lng || 0, zone_name || null);
+    `).run(req.authUserId, computedLocationType, lat || 0, lng || 0, computedZoneName || null);
 
     db.get().prepare(`
       INSERT INTO child_location_history (user_id, lat, lng, zone_name)
       VALUES (?, ?, ?, ?)
-    `).run(req.authUserId, lat || 0, lng || 0, zone_name || null);
+    `).run(req.authUserId, lat || 0, lng || 0, computedZoneName || null);
 
     // Clear pending requests
     db.get().prepare(`
@@ -115,11 +156,11 @@ router.get('/zones', (req, res) => {
 
 router.post('/zones', (req, res) => {
   try {
-    const { name, lat, lng, zone_type } = req.body;
+    const { name, lat, lng, zone_type, radius } = req.body;
     db.get().prepare(`
-      INSERT INTO family_zones (name, lat, lng, zone_type)
-      VALUES (?, ?, ?, ?)
-    `).run(name, lat, lng, zone_type);
+      INSERT INTO family_zones (name, lat, lng, zone_type, radius)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(name, lat, lng, zone_type, radius || 250);
     res.json({ ok: true });
   } catch (err) {
     log.error('POST /zones error:', err);
@@ -155,6 +196,120 @@ router.patch('/zones/:id', (req, res) => {
   try {
     const { radius } = req.body;
     db.get().prepare('UPDATE family_zones SET radius = ? WHERE id = ?').run(radius, req.params.id);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/events', (req, res) => {
+  try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
+    const events = db.get().prepare(`
+      SELECT le.*, u.display_name 
+      FROM location_events le
+      JOIN users u ON u.id = le.user_id
+      ORDER BY le.timestamp DESC LIMIT 50
+    `).all();
+    res.json({ data: events });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/insights', (req, res) => {
+  try {
+    const user = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(req.authUserId);
+    const isParent = user.role === 'admin' || ['dad', 'mom', 'parent', 'grandparent'].includes(user.family_role);
+    if (!isParent) return res.status(403).json({ error: 'Forbidden' });
+
+    const mostVisited = db.get().prepare(`
+      SELECT u.display_name, ch.zone_name, count(*) as visits
+      FROM child_location_history ch
+      JOIN users u ON u.id = ch.user_id
+      WHERE ch.zone_name IS NOT NULL
+      GROUP BY ch.user_id, ch.zone_name
+      ORDER BY visits DESC
+      LIMIT 12
+    `).all();
+
+    const recent = db.get().prepare(`
+      SELECT u.display_name, ch.zone_name, MAX(ch.timestamp) as last_seen
+      FROM child_location_history ch
+      JOIN users u ON u.id = ch.user_id
+      WHERE ch.zone_name IS NOT NULL
+      GROUP BY ch.user_id, ch.zone_name
+      ORDER BY last_seen DESC
+      LIMIT 12
+    `).all();
+
+    res.json({ data: { mostVisited, recent } });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/expected', (req, res) => {
+  try {
+    const checkins = db.get().prepare(`
+      SELECT e.*, u.display_name 
+      FROM expected_checkins e
+      JOIN users u ON u.id = e.user_id
+    `).all();
+
+    const now = new Date();
+    const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+    const currentStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    
+    const enriched = checkins.map(c => {
+      let status = 'pending';
+      let days = [];
+      try { days = JSON.parse(c.days_of_week); } catch(e) {}
+      
+      if (days.includes(currentDay)) {
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        const arrivedEvent = db.get().prepare(`
+          SELECT * FROM location_events 
+          WHERE user_id = ? AND zone_name = ? AND event_type = 'arrived' AND timestamp >= ?
+        `).get(c.user_id, c.zone_name, startOfDay);
+
+        if (arrivedEvent) {
+           status = 'arrived';
+        } else if (currentStr > c.expected_time) {
+           status = 'missed';
+        }
+      } else {
+        status = 'not_today';
+      }
+      return { ...c, status };
+    });
+
+    res.json({ data: enriched });
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/expected', (req, res) => {
+  try {
+    const { user_id, zone_name, expected_time, days_of_week } = req.body;
+    db.get().prepare(`
+      INSERT INTO expected_checkins (user_id, zone_name, expected_time, days_of_week)
+      VALUES (?, ?, ?, ?)
+    `).run(user_id, zone_name, expected_time, JSON.stringify(days_of_week || [1,2,3,4,5]));
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.delete('/expected/:id', (req, res) => {
+  try {
+    db.get().prepare('DELETE FROM expected_checkins WHERE id = ?').run(req.params.id);
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: 'Server error' });
