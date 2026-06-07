@@ -212,9 +212,35 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         document.documentElement.style.overflow = '';
       } else if (blockData && !overlay) {
         showOverlayBlocker(blockData.title, blockData.message);
+      } else if (blockData && overlay) {
+        // Update message if it changed
+        const msgEl = overlay.querySelector('p');
+        if (msgEl && msgEl.innerText !== blockData.message) {
+          msgEl.innerText = blockData.message;
+        }
       }
     });
   }
 });
+
+// Heartbeat to automatically enforce/teardown time-based rules
+setInterval(() => {
+  chrome.storage.local.get(['rules_payload', 'daily_usage', 'active_role'], (data) => {
+    const active_role = data.active_role || 'child';
+    if (active_role !== 'child' || !data.rules_payload) return;
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return;
+
+    const blockData = shouldBlock(hostname, data.rules_payload, data.daily_usage);
+    const overlay = document.getElementById('oikos-block-overlay');
+    
+    if (!blockData && overlay) {
+      overlay.remove();
+      document.documentElement.style.overflow = '';
+    } else if (blockData && !overlay) {
+      showOverlayBlocker(blockData.title, blockData.message);
+    }
+  });
+}, 60000);
 
 })();

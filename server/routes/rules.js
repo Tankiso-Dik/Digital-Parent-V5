@@ -33,27 +33,31 @@ router.get('/sync', (req, res) => {
     const categories = {};
     const category_map = {};
 
+    const safeParse = (str) => {
+      try { return JSON.parse(str); } catch (e) { return [1,2,3,4,5,6,7]; }
+    };
+
     for (const r of rules) {
       if (r.type === 'domain') {
         domains[r.value] = { action: r.action };
         if (r.limit_minutes) domains[r.value].limit_mins = r.limit_minutes;
         if (r.start_time) domains[r.value].start_time = r.start_time;
         if (r.end_time) domains[r.value].end_time = r.end_time;
-        if (r.days_of_week) domains[r.value].days = JSON.parse(r.days_of_week);
+        if (r.days_of_week) domains[r.value].days = safeParse(r.days_of_week);
         if (r.custom_message) domains[r.value].message = r.custom_message;
       } else if (r.type === 'wildcard') {
         wildcards.push({ pattern: r.value, action: r.action });
         if (r.limit_minutes) wildcards[wildcards.length - 1].limit_mins = r.limit_minutes;
         if (r.start_time) wildcards[wildcards.length - 1].start_time = r.start_time;
         if (r.end_time) wildcards[wildcards.length - 1].end_time = r.end_time;
-        if (r.days_of_week) wildcards[wildcards.length - 1].days = JSON.parse(r.days_of_week);
+        if (r.days_of_week) wildcards[wildcards.length - 1].days = safeParse(r.days_of_week);
         if (r.custom_message) wildcards[wildcards.length - 1].message = r.custom_message;
       } else if (r.type === 'category') {
         categories[r.value] = { action: r.action };
         if (r.limit_minutes) categories[r.value].limit_mins = r.limit_minutes;
         if (r.start_time) categories[r.value].start_time = r.start_time;
         if (r.end_time) categories[r.value].end_time = r.end_time;
-        if (r.days_of_week) categories[r.value].days = JSON.parse(r.days_of_week);
+        if (r.days_of_week) categories[r.value].days = safeParse(r.days_of_week);
         if (r.custom_message) categories[r.value].message = r.custom_message;
         
         // Populate category_map ONLY for categories that have rules
