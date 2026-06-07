@@ -25,6 +25,7 @@ async function fetchRules() {
 
 fetchRules();
 chrome.alarms.create('syncRules', { periodInMinutes: 1 });
+setInterval(updateDailyUsage, 1000);
 
 async function updateDailyUsage() {
   const data = await chrome.storage.local.get(['activeSession', 'daily_usage', 'rules_payload']);

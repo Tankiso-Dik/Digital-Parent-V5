@@ -129,6 +129,81 @@ function shouldBlock(currentDomain, payload, usageObj) {
   return null;
 }
 
+function getActiveLimitTracker(currentDomain, payload, usageObj) {
+  const usage = usageObj && usageObj.usage ? usageObj.usage : {};
+  if (!payload || !payload.rules) return null;
+
+  if (payload.rules.domains) {
+    for (const d of Object.keys(payload.rules.domains)) {
+      if (currentDomain === d || currentDomain.endsWith('.' + d)) {
+        const rule = payload.rules.domains[d];
+        if (rule.action === 'limit' && checkSchedule(rule)) {
+          return { limit: rule.limit_mins, current: usage[d] || 0 };
+        }
+      }
+    }
+  }
+
+  if (payload.rules.wildcards) {
+    for (const w of payload.rules.wildcards) {
+      const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+      if (new RegExp(regexStr).test(currentDomain)) {
+        const rule = w;
+        if (rule.action === 'limit' && checkSchedule(rule)) {
+          return { limit: rule.limit_mins, current: usage[w.pattern] || 0 };
+        }
+      }
+    }
+  }
+
+  if (payload.category_map && payload.category_map[currentDomain]) {
+    const category = payload.category_map[currentDomain];
+    if (payload.rules.categories && payload.rules.categories[category]) {
+      const rule = payload.rules.categories[category];
+      if (rule.action === 'limit' && checkSchedule(rule)) {
+        return { limit: rule.limit_mins, current: usage['cat_' + category] || 0 };
+      }
+    }
+  }
+
+  return null;
+}
+
+function updateTrackerUI(trackerData) {
+  let ui = document.getElementById('oikos-tracker-ui');
+  if (!trackerData) {
+    if (ui) ui.remove();
+    return;
+  }
+  
+  if (!ui) {
+    ui = document.createElement('div');
+    ui.id = 'oikos-tracker-ui';
+    ui.style.cssText = `
+      position: fixed !important; bottom: 20px !important; right: 20px !important; z-index: 2147483645 !important;
+      background: rgba(0,0,0,0.8) !important; color: white !important; padding: 10px 20px !important; border-radius: 30px !important;
+      font-family: system-ui, -apple-system, sans-serif !important; font-size: 14px !important; 
+      backdrop-filter: blur(10px) !important; border: 1px solid rgba(255,255,255,0.1) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important; pointer-events: none !important;
+      display: flex !important; align-items: center !important; gap: 8px !important; font-weight: 500 !important;
+    `;
+    if (document.body) document.body.appendChild(ui);
+    else document.documentElement.appendChild(ui);
+  }
+  
+  const remMinsFloat = Math.max(0, trackerData.limit - trackerData.current);
+  const wholeMins = Math.floor(remMinsFloat);
+  const secs = Math.round((remMinsFloat - wholeMins) * 60);
+  const color = remMinsFloat < 1 ? '#FF3B30' : (remMinsFloat < 5 ? '#FF9500' : '#34C759');
+  
+  const timeStr = secs > 0 ? (wholeMins > 0 ? `${wholeMins}m ${secs}s` : `${secs}s`) : `${wholeMins}m`;
+  
+  ui.innerHTML = `
+    <div style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; box-shadow: 0 0 8px ${color};"></div>
+    <span>Time Left: <strong style="color: ${color}; margin-left: 4px;">${timeStr}</strong></span>
+  `;
+}
+
 async function enforceRules() {
   const hostname = window.location.hostname;
   
@@ -243,6 +318,13 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
           extraContainer.innerHTML = blockData.extraHtml || '';
         }
       }
+      
+      if (!blockData) {
+        const trackerData = getActiveLimitTracker(hostname, data.rules_payload, data.daily_usage);
+        updateTrackerUI(trackerData);
+      } else {
+        updateTrackerUI(null);
+      }
     });
   }
 });
@@ -273,7 +355,14 @@ setInterval(() => {
         extraContainer.innerHTML = blockData.extraHtml || '';
       }
     }
+    
+    if (!blockData) {
+      const trackerData = getActiveLimitTracker(hostname, data.rules_payload, data.daily_usage);
+      updateTrackerUI(trackerData);
+    } else {
+      updateTrackerUI(null);
+    }
   });
-}, 60000);
+}, 1000);
 
 })();
