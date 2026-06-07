@@ -159,34 +159,30 @@ export { api, auth, apiFetch, ApiError };
 // Mandatory Location Sharing Polling
 // --------------------------------------------------------
 
-let locationBannerActive = false;
+let locationLockActive = false;
 
-function showLocationRequestBanner() {
-  if (locationBannerActive) return;
-  locationBannerActive = true;
-  
-  const banner = document.createElement('div');
-  banner.id = 'oikos-location-banner';
-  banner.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 500px; background: var(--color-surface-elevated, #fff); z-index: 99999; display: flex; flex-direction: column; padding: 20px; border-radius: 16px; border: 2px solid var(--color-primary); box-shadow: 0 10px 30px rgba(0,0,0,0.2); font-family: system-ui; gap: 15px; animation: glass-modal-scale-in 0.3s ease-out;';
-  
-  banner.innerHTML = `
-    <div>
-      <h3 style="margin: 0 0 5px 0; font-size: 18px; color: var(--text-main, #000); display: flex; align-items: center; gap: 8px;">📍 Parent Requested Location</h3>
-      <p style="margin: 0; font-size: 14px; color: var(--text-secondary, #666);">Your parent has requested to see your current location.</p>
+function enforceLocationLock(messageText) {
+  if (locationLockActive) {
+    const existingMsg = document.getElementById('oikos-loc-msg');
+    if (existingMsg && existingMsg.innerText !== messageText) {
+      existingMsg.innerText = messageText;
+    }
+    return;
+  }
+  locationLockActive = true;
+  document.body.style.overflow = 'hidden';
+  const overlay = document.createElement('div');
+  overlay.id = 'oikos-location-lock';
+  overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 2147483647; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; font-family: system-ui; backdrop-filter: blur(10px);';
+  overlay.innerHTML = `
+    <div style="max-width: 400px; padding: 30px; background: rgba(255,255,255,0.1); border-radius: 16px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(10px); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <h2 style="margin: 0 0 15px 0; font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;"><span>📍</span> Location Required</h2>
+      <p id="oikos-loc-msg" style="margin: 0 0 25px 0; font-size: 16px; color: #ccc; line-height: 1.5;">${messageText}</p>
+      <button id="oikos-share-loc-btn" style="width: 100%; padding: 15px; font-size: 16px; font-weight: bold; border-radius: 8px; border: none; background: #007AFF; color: white; cursor: pointer; transition: all 0.2s;">Share Location to Unlock</button>
+      <p id="oikos-loc-error" style="color: #FF3B30; margin-top: 15px; font-size: 14px; display: none;"></p>
     </div>
-    <div style="display: flex; gap: 10px;">
-      <button id="oikos-share-loc-btn" style="flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 8px; border: none; background: var(--color-primary, #007AFF); color: white; cursor: pointer; transition: all 0.2s;">Share Location</button>
-      <button id="oikos-ignore-loc-btn" style="padding: 12px 20px; font-size: 14px; font-weight: bold; border-radius: 8px; border: 1px solid var(--color-border-subtle, #ddd); background: transparent; color: var(--text-secondary, #666); cursor: pointer; transition: all 0.2s;">Dismiss</button>
-    </div>
-    <p id="oikos-loc-error" style="color: var(--color-danger, #FF3B30); margin: 0; font-size: 13px; display: none;"></p>
   `;
-  document.body.appendChild(banner);
-
-  document.getElementById('oikos-ignore-loc-btn').onclick = () => {
-    removeLocationBanner();
-    // Temporarily ignore for this session (will reappear if page reloads or after 15 mins)
-    sessionStorage.setItem('ignoredLocRequest', Date.now().toString());
-  };
+  document.body.appendChild(overlay);
 
   document.getElementById('oikos-share-loc-btn').onclick = async (e) => {
     const btn = e.target;
@@ -198,7 +194,7 @@ function showLocationRequestBanner() {
        const errEl = document.getElementById('oikos-loc-error');
        errEl.innerText = 'Geolocation not supported by browser.';
        errEl.style.display = 'block';
-       btn.innerText = 'Share Location';
+       btn.innerText = 'Share Location to Unlock';
        btn.disabled = false;
        btn.style.opacity = '1';
        return;
@@ -210,30 +206,30 @@ function showLocationRequestBanner() {
            method: 'POST',
            body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
          });
-         removeLocationBanner();
-         sessionStorage.removeItem('ignoredLocRequest');
+         removeLocationLock();
        } catch (err) {
          const errEl = document.getElementById('oikos-loc-error');
          errEl.innerText = 'Failed to send to server.';
          errEl.style.display = 'block';
-         btn.innerText = 'Share Location';
+         btn.innerText = 'Share Location to Unlock';
          btn.disabled = false;
          btn.style.opacity = '1';
        }
     }, (err) => {
        const errEl = document.getElementById('oikos-loc-error');
-       errEl.innerText = 'Access Denied. You must allow location access in your browser settings.';
+       errEl.innerText = 'Access Denied. You must allow location access in your browser settings to unlock.';
        errEl.style.display = 'block';
-       btn.innerText = 'Share Location';
+       btn.innerText = 'Share Location to Unlock';
        btn.disabled = false;
        btn.style.opacity = '1';
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   };
 }
 
-function removeLocationBanner() {
-  locationBannerActive = false;
-  const el = document.getElementById('oikos-location-banner');
+function removeLocationLock() {
+  locationLockActive = false;
+  document.body.style.overflow = '';
+  const el = document.getElementById('oikos-location-lock');
   if (el) el.remove();
 }
 
@@ -243,23 +239,35 @@ setInterval(async () => {
     if (!meRes || !meRes.ok) return;
     const me = await meRes.json();
     if (me && me.user && me.user.family_role === 'child') {
-       // Check if child recently ignored the request
-       const ignored = sessionStorage.getItem('ignoredLocRequest');
-       if (ignored && (Date.now() - parseInt(ignored) < 900000)) {
-         return; // Ignore for 15 mins if dismissed
-       }
        
-       const pendingRes = await fetch(`${API_BASE}/location/pending-status`, { credentials: 'same-origin', cache: 'no-store' }).catch(()=>null);
-       if (pendingRes && pendingRes.ok) {
-          const data = await pendingRes.json();
-          if (data.pending) {
-             showLocationRequestBanner();
-          } else {
-             removeLocationBanner();
+       let lockMessage = null;
+
+       const expectedRes = await fetch(`${API_BASE}/location/expected`, { credentials: 'same-origin', cache: 'no-store' }).catch(()=>null);
+       if (expectedRes && expectedRes.ok) {
+          const expectedData = await expectedRes.json();
+          const missed = (expectedData.data || []).find(c => c.status === 'missed');
+          if (missed) {
+             lockMessage = \`Your check in for \${missed.zone_name} arrival is expected. Please share your location to confirm.\`;
           }
        }
+
+       if (!lockMessage) {
+         const pendingRes = await fetch(`${API_BASE}/location/pending-status`, { credentials: 'same-origin', cache: 'no-store' }).catch(()=>null);
+         if (pendingRes && pendingRes.ok) {
+            const data = await pendingRes.json();
+            if (data.pending) {
+               lockMessage = 'Your parent has requested your current location. Please share it to unlock this device.';
+            }
+         }
+       }
+
+       if (lockMessage) {
+          enforceLocationLock(lockMessage);
+       } else {
+          removeLocationLock();
+       }
     } else {
-       removeLocationBanner();
+       removeLocationLock();
     }
   } catch (e) {
     // Ignore offline errors
