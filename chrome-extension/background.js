@@ -48,6 +48,24 @@ async function updateDailyUsage() {
   const domain = session.domain;
   daily.usage[domain] = (daily.usage[domain] || 0) + deltaMins;
   
+  if (data.rules_payload && data.rules_payload.rules) {
+    if (data.rules_payload.rules.domains) {
+      for (const d of Object.keys(data.rules_payload.rules.domains)) {
+        if (domain === d || domain.endsWith('.' + d)) {
+          if (domain !== d) daily.usage[d] = (daily.usage[d] || 0) + deltaMins;
+        }
+      }
+    }
+    if (data.rules_payload.rules.wildcards) {
+      for (const w of data.rules_payload.rules.wildcards) {
+        const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+        if (new RegExp(regexStr).test(domain)) {
+          daily.usage[w.pattern] = (daily.usage[w.pattern] || 0) + deltaMins;
+        }
+      }
+    }
+  }
+  
   let category = null;
   if (data.rules_payload && data.rules_payload.category_map && data.rules_payload.category_map[domain]) {
     category = data.rules_payload.category_map[domain];
@@ -75,10 +93,14 @@ function checkLimits(domain, category, usage, payload) {
   if (!payload || !payload.rules) return;
   let block = false;
   
-  if (payload.rules.domains && payload.rules.domains[domain]) {
-    const r = payload.rules.domains[domain];
-    if (r.action !== 'allow' && checkSchedule(r)) {
-      if (r.action === 'block' || (r.action === 'limit' && usage[domain] >= r.limit_mins)) block = true;
+  if (payload.rules.domains) {
+    for (const d of Object.keys(payload.rules.domains)) {
+      if (domain === d || domain.endsWith('.' + d)) {
+        const r = payload.rules.domains[d];
+        if (r.action !== 'allow' && checkSchedule(r)) {
+          if (r.action === 'block' || (r.action === 'limit' && usage[d] >= r.limit_mins)) block = true;
+        }
+      }
     }
   }
   
