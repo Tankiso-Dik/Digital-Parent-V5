@@ -741,7 +741,7 @@ router.post('/', (req, res) => {
         attachment.data,
         documentId,
         status,
-        req.body.category || 'chore'
+        req.body.category || 'responsibility'
       );
       setEventAssignments(db.get(), result.lastInsertRowid, userIds);
       return result.lastInsertRowid;
@@ -794,7 +794,7 @@ router.patch('/:id', (req, res) => {
 
           // Award points if not already done (for single) or for this instance (recurring)
           // Note: In a production app, we'd check if points were already awarded for this specific instance date.
-          if (event.assigned_to && (event.category === 'chore' || event.category === 'study' || event.category === 'medication' || event.category === 'routine')) {
+          if (event.assigned_to) {
             db.get().prepare(`
               UPDATE users 
               SET points = COALESCE(points, 0) + 10,

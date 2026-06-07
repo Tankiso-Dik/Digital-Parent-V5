@@ -97,11 +97,11 @@ export async function render(container, { user }) {
   }
 
   function getCategoryConfig(cat) {
-    if (cat === 'study') return { icon: 'book-open', color: '#007AFF', bg: 'rgba(0,122,255,0.1)', label: 'Study Block' };
-    if (cat === 'curfew') return { icon: 'moon', color: '#5856D6', bg: 'rgba(88,86,214,0.1)', label: 'Curfew' };
-    if (cat === 'screentime') return { icon: 'gamepad-2', color: '#34C759', bg: 'rgba(52,199,89,0.1)', label: 'Screen Time' };
-    if (cat === 'medication') return { icon: 'pill', color: '#FF3B30', bg: 'rgba(255,59,48,0.1)', label: 'Medication' };
-    return { icon: 'check-square', color: '#FF9500', bg: 'rgba(255,149,0,0.1)', label: 'Chore' };
+    if (cat === 'learning') return { icon: 'book-open', color: '#007AFF', bg: 'rgba(0,122,255,0.1)', label: 'Learning' };
+    if (cat === 'health') return { icon: 'heart-pulse', color: '#FF3B30', bg: 'rgba(255,59,48,0.1)', label: 'Health' };
+    if (cat === 'routine') return { icon: 'clock', color: '#5856D6', bg: 'rgba(88,86,214,0.1)', label: 'Routine' };
+    if (cat === 'optional') return { icon: 'coffee', color: '#34C759', bg: 'rgba(52,199,89,0.1)', label: 'Free Time' };
+    return { icon: 'check-square', color: '#FF9500', bg: 'rgba(255,149,0,0.1)', label: 'Responsibility' };
   }
 
   function renderTimeline() {
@@ -129,7 +129,7 @@ export async function render(container, { user }) {
     timelineContainer.appendChild(line);
 
     events.forEach(ev => {
-      const config = getCategoryConfig(ev.category || 'chore');
+      const config = getCategoryConfig(ev.category || 'responsibility');
       const isDone = ev.status === 'done';
       
       const item = document.createElement('div');
@@ -176,7 +176,7 @@ export async function render(container, { user }) {
         </div>
       `;
       
-      if (!isParent && !isDone && (ev.category === 'chore' || ev.category === 'study' || ev.category === 'medication' || ev.category === 'routine') && isToday) {
+      if (!isParent && !isDone && isToday) {
         const actBtn = document.createElement('button');
         actBtn.className = 'btn btn--success btn--sm';
         actBtn.style.position = 'relative';
@@ -220,7 +220,7 @@ export async function render(container, { user }) {
         const actionWrap = document.createElement('div');
         actionWrap.style.cssText = 'display: flex; gap: 8px; align-items: center; position: relative; z-index: 10;';
 
-        const isTask = (ev.category === 'chore' || ev.category === 'study' || ev.category === 'medication' || ev.category === 'routine');
+        const isTask = true;
 
         if (isTask && !isDone) {
           const actBtn = document.createElement('button');
@@ -301,18 +301,31 @@ export async function render(container, { user }) {
       <form id="routine-form" style="display: flex; flex-direction: column; gap: 16px;">
         <div>
           <label class="form-label">Task / Title</label>
-          <input type="text" id="r-title" class="form-input" required placeholder="e.g. Do Math Homework" />
+          <input type="text" id="r-title" class="form-input" list="task-suggestions" required placeholder="e.g. Do Math Homework" autocomplete="off" />
+          <datalist id="task-suggestions">
+            <option value="Morning Routine (Brush teeth, make bed)">
+            <option value="Bedtime Routine">
+            <option value="Do Math Homework">
+            <option value="Read for 30 minutes">
+            <option value="Practice Instrument">
+            <option value="Clean Bedroom">
+            <option value="Take out the Trash">
+            <option value="Load / Unload Dishwasher">
+            <option value="Walk the Dog">
+            <option value="Take Medication">
+            <option value="Exercise / Play outside">
+          </datalist>
         </div>
         
         <div style="display: flex; gap: 16px;">
           <div style="flex: 1;">
             <label class="form-label">Category</label>
             <select id="r-cat" class="form-input" required>
-              <option value="chore">🧹 Chore (Earns Points)</option>
-              <option value="study">📚 Study Time (Locks Apps)</option>
-              <option value="curfew">🌙 Curfew / Bedtime (Locks Apps)</option>
-              <option value="screentime">🎮 Screen Time (Free)</option>
-              <option value="medication">💊 Medication (Earns Points)</option>
+              <option value="routine">🔁 Routine (Daily Habits)</option>
+              <option value="learning">📚 Learning (Study & Practice)</option>
+              <option value="responsibility">🧹 Responsibility (Chores & Errands)</option>
+              <option value="health">💊 Health (Exercise & Medication)</option>
+              <option value="optional">☕ Optional (Free Time)</option>
             </select>
           </div>
           <div style="flex: 1;">
