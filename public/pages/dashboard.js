@@ -174,8 +174,11 @@ async function renderScreenControlDashboard(grid, user) {
         </label>
         
         <div id="url-limit-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
-          <label style="font-size: 12px; color: var(--text-muted);">Daily Limit (Minutes)</label>
-          <input type="number" id="url-limit-mins" class="input" style="width: 100%; margin-top: 4px;" value="60">
+          <div style="display: flex; gap: 8px;">
+            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Hours</label><input type="number" id="url-limit-hrs" class="input" style="width: 100%; margin-top: 4px;" value="1" min="0"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Minutes</label><input type="number" id="url-limit-mins" class="input" style="width: 100%; margin-top: 4px;" value="0" min="0" max="59"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Seconds</label><input type="number" id="url-limit-secs" class="input" style="width: 100%; margin-top: 4px;" value="0" min="0" max="59"></div>
+          </div>
         </div>
 
         <div id="url-schedule-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
@@ -235,7 +238,11 @@ async function renderScreenControlDashboard(grid, user) {
         cMsg = modal.querySelector('#url-msg').value.trim() || null;
       } else if (blockType === 'limit') {
         action = 'limit';
-        limitMins = parseInt(modal.querySelector('#url-limit-mins').value, 10) || 60;
+        const h = parseInt(modal.querySelector('#url-limit-hrs').value, 10) || 0;
+        const m = parseInt(modal.querySelector('#url-limit-mins').value, 10) || 0;
+        const s = parseInt(modal.querySelector('#url-limit-secs').value, 10) || 0;
+        limitMins = (h * 60) + m + (s / 60);
+        if (limitMins <= 0) limitMins = 60; // fallback if 0
       }
       
       await saveRule(type, val, action, limitMins, sTime, eTime, days, cMsg);
@@ -255,17 +262,33 @@ async function renderScreenControlDashboard(grid, user) {
   const activeBlockedRules = rulesData.blocked_rules.filter(r => r.action === 'block' || r.action === 'limit');
   let blockedListHtml = activeBlockedRules.length === 0 ? 
     '<div style="color: var(--text-muted); font-size: 14px;">No active rules blocking apps.</div>' :
-    activeBlockedRules.map(r => `
+    activeBlockedRules.map(r => {
+    let badge = '';
+    if (r.start_time && r.end_time) {
+      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Scheduled: ${r.start_time} - ${r.end_time}</span>`;
+    } else if (r.limit_minutes) {
+      let limitStr = '';
+      if (r.limit_minutes >= 60) {
+        limitStr = `${Math.floor(r.limit_minutes/60)}h ${Math.floor(r.limit_minutes%60)}m`;
+      } else {
+        const wholeMins = Math.floor(r.limit_minutes);
+        const secs = Math.round((r.limit_minutes - wholeMins) * 60);
+        limitStr = secs > 0 ? (wholeMins > 0 ? `${wholeMins}m ${secs}s` : `${secs}s`) : `${wholeMins}m`;
+      }
+      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Limit: ${limitStr}</span>`;
+    }
+    return `
     <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-body); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle); margin-bottom: 8px;">
       <div>
         <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); margin-right: 8px;">${r.type}</span>
         <span style="font-family: monospace; font-size: 14px;">${r.value}</span>
+        ${badge}
       </div>
       <button class="unblock-rule-btn" data-id="${r.id}" style="background: none; border: none; color: var(--color-danger); cursor: pointer; display: flex; gap: 4px; align-items: center; font-size: 12px;">
         <i data-lucide="unlock" style="width:14px;"></i> Unblock
       </button>
     </div>
-  `).join('');
+  `}).join('');
 
   blockedRulesCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Currently active restrictions. Click Unblock to remove them instantly.</p>
