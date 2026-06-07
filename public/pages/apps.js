@@ -36,10 +36,14 @@ export async function render(container, { user }) {
 
     const getAppBadge = (appName) => {
       if (!rulesPayload) return '';
-      if (rulesPayload.domains && rulesPayload.domains[appName]) {
-        const r = rulesPayload.domains[appName];
-        if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
-        if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
+      if (rulesPayload.domains) {
+        for (const d of Object.keys(rulesPayload.domains)) {
+          if (appName === d || appName.endsWith('.' + d)) {
+            const r = rulesPayload.domains[d];
+            if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
+            if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
+          }
+        }
       }
       if (rulesPayload.wildcards) {
         for (const w of rulesPayload.wildcards) {
@@ -48,6 +52,14 @@ export async function render(container, { user }) {
             if (w.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
             if (w.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${w.limit_mins}m</span>`;
           }
+        }
+      }
+      if (rulesRes.data?.category_map && rulesRes.data.category_map[appName] && rulesPayload.categories) {
+        const cat = rulesRes.data.category_map[appName];
+        const r = rulesPayload.categories[cat];
+        if (r) {
+          if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
+          if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
         }
       }
       return '';
