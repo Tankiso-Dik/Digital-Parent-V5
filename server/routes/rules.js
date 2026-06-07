@@ -26,7 +26,7 @@ router.get('/sync', (req, res) => {
     const adminId = adminUser.id;
 
     // 1. Fetch domains, wildcards, and categories
-    const rules = database.prepare("SELECT type, value, action, limit_minutes FROM blocked_rules").all();
+    const rules = database.prepare("SELECT type, value, action, limit_minutes, start_time, end_time, days_of_week, custom_message FROM blocked_rules").all();
     
     const domains = {};
     const wildcards = [];
@@ -36,12 +36,25 @@ router.get('/sync', (req, res) => {
     for (const r of rules) {
       if (r.type === 'domain') {
         domains[r.value] = { action: r.action };
+        if (r.limit_minutes) domains[r.value].limit_mins = r.limit_minutes;
+        if (r.start_time) domains[r.value].start_time = r.start_time;
+        if (r.end_time) domains[r.value].end_time = r.end_time;
+        if (r.days_of_week) domains[r.value].days = JSON.parse(r.days_of_week);
+        if (r.custom_message) domains[r.value].message = r.custom_message;
       } else if (r.type === 'wildcard') {
         wildcards.push({ pattern: r.value, action: r.action });
         if (r.limit_minutes) wildcards[wildcards.length - 1].limit_mins = r.limit_minutes;
+        if (r.start_time) wildcards[wildcards.length - 1].start_time = r.start_time;
+        if (r.end_time) wildcards[wildcards.length - 1].end_time = r.end_time;
+        if (r.days_of_week) wildcards[wildcards.length - 1].days = JSON.parse(r.days_of_week);
+        if (r.custom_message) wildcards[wildcards.length - 1].message = r.custom_message;
       } else if (r.type === 'category') {
         categories[r.value] = { action: r.action };
         if (r.limit_minutes) categories[r.value].limit_mins = r.limit_minutes;
+        if (r.start_time) categories[r.value].start_time = r.start_time;
+        if (r.end_time) categories[r.value].end_time = r.end_time;
+        if (r.days_of_week) categories[r.value].days = JSON.parse(r.days_of_week);
+        if (r.custom_message) categories[r.value].message = r.custom_message;
         
         // Populate category_map ONLY for categories that have rules
         const catDomains = database.prepare(`
@@ -129,17 +142,17 @@ router.get('/', (req, res) => {
 // Update or create a rule
 router.post('/rule', (req, res) => {
   try {
-    const { type, value, action, limit_minutes } = req.body;
+    const { type, value, action, limit_minutes, start_time, end_time, days_of_week, custom_message } = req.body;
     const database = db.get();
     
     // check if exists
     const existing = database.prepare("SELECT id FROM blocked_rules WHERE type = ? AND value = ?").get(type, value);
     if (existing) {
-      database.prepare("UPDATE blocked_rules SET action = ?, limit_minutes = ? WHERE id = ?")
-              .run(action, limit_minutes || null, existing.id);
+      database.prepare("UPDATE blocked_rules SET action = ?, limit_minutes = ?, start_time = ?, end_time = ?, days_of_week = ?, custom_message = ? WHERE id = ?")
+              .run(action, limit_minutes || null, start_time || null, end_time || null, days_of_week ? JSON.stringify(days_of_week) : null, custom_message || null, existing.id);
     } else {
-      database.prepare("INSERT INTO blocked_rules (user_id, type, value, action, limit_minutes) VALUES (?, ?, ?, ?, ?)")
-              .run(req.authUserId, type, value, action, limit_minutes || null);
+      database.prepare("INSERT INTO blocked_rules (user_id, type, value, action, limit_minutes, start_time, end_time, days_of_week, custom_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+              .run(req.authUserId, type, value, action, limit_minutes || null, start_time || null, end_time || null, days_of_week ? JSON.stringify(days_of_week) : null, custom_message || null);
     }
     res.json({ success: true });
   } catch (err) {

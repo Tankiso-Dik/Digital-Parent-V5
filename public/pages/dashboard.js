@@ -95,11 +95,14 @@ async function renderScreenControlDashboard(grid, user) {
 
   const getRule = (type, value) => rulesData.blocked_rules.find(r => r.type === type && r.value === value);
 
-  const saveRule = async (type, value, action, limit = null) => {
+  const saveRule = async (type, value, action, limit = null, startTime = null, endTime = null, daysOfWeek = null, customMessage = null) => {
     try {
       await apiFetch('/rules/rule', {
         method: 'POST',
-        body: JSON.stringify({ type, value, action, limit_minutes: limit })
+        body: JSON.stringify({ 
+          type, value, action, limit_minutes: limit,
+          start_time: startTime, end_time: endTime, days_of_week: daysOfWeek, custom_message: customMessage
+        })
       });
       await triggerSilentSync();
       showToast('Rule saved', 'success');
@@ -167,12 +170,22 @@ async function renderScreenControlDashboard(grid, user) {
   grid.appendChild(urlCard);
   
   const urlRules = rulesData.blocked_rules.filter(r => r.type === 'domain' || r.type === 'wildcard');
-  let urlListHtml = urlRules.map(r => `
+  let urlListHtml = urlRules.map(r => {
+    let badge = '';
+    if (r.start_time && r.end_time) {
+      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Scheduled: ${r.start_time} - ${r.end_time}</span>`;
+    } else if (r.limit_minutes) {
+      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Limit: ${r.limit_minutes}m</span>`;
+    }
+    return `
     <div style="display: flex; justify-content: space-between; background: var(--bg-body); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle);">
-      <span style="font-family: monospace;">${r.value}</span>
+      <div>
+        <span style="font-family: monospace;">${r.value}</span>
+        ${badge}
+      </div>
       <button class="del-url-btn" data-id="${r.id}" style="background: none; border: none; color: var(--color-danger); cursor: pointer;"><i data-lucide="trash-2" style="width:16px;"></i></button>
     </div>
-  `).join('');
+  `}).join('');
 
   urlCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Precision control for specific websites.</p>
@@ -189,9 +202,73 @@ async function renderScreenControlDashboard(grid, user) {
     const val = urlCard.querySelector('#new-url-input').value.trim();
     if(!val) return;
     const type = val.includes('*') ? 'wildcard' : 'domain';
-    await saveRule(type, val, 'block');
-    grid.innerHTML = '';
-    await renderScreenControlDashboard(grid, user);
+    
+    // Create Premium Modal
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+    modal.innerHTML = `
+      <div style="background: var(--bg-card); width: 400px; padding: 24px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--color-border-subtle);">
+        <h3 style="margin: 0 0 16px 0; font-size: 20px;">Block <span style="font-family: monospace; color: var(--color-primary);">${val}</span></h3>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">How would you like to restrict this website?</p>
+        
+        <label style="display: flex; gap: 12px; margin-bottom: 12px; cursor: pointer;">
+          <input type="radio" name="url-block-type" value="permanent" checked style="margin-top: 4px;">
+          <div>
+            <strong>Permanent Block</strong>
+            <div style="font-size: 12px; color: var(--text-muted);">Website will be completely blocked 24/7.</div>
+          </div>
+        </label>
+        
+        <label style="display: flex; gap: 12px; margin-bottom: 16px; cursor: pointer;">
+          <input type="radio" name="url-block-type" value="scheduled" style="margin-top: 4px;">
+          <div>
+            <strong>Scheduled Window</strong>
+            <div style="font-size: 12px; color: var(--text-muted);">Website is only blocked during specific times.</div>
+          </div>
+        </label>
+        
+        <div id="url-schedule-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Start Time</label><input type="time" id="url-start" class="input" style="width:100%;" value="15:00"></div>
+            <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">End Time</label><input type="time" id="url-end" class="input" style="width:100%;" value="17:00"></div>
+          </div>
+          <input type="text" id="url-days" class="input" placeholder="Days (1=Mon, 7=Sun)" style="width: 100%; margin-bottom: 8px;" value="[1,2,3,4,5]">
+          <input type="text" id="url-msg" class="input" placeholder="Custom Block Message (Optional)" style="width: 100%;">
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+          <button id="url-cancel-btn" class="btn" style="background: var(--bg-body); color: var(--text-main);">Cancel</button>
+          <button id="url-save-btn" class="btn btn--primary">Save Block Rule</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    const typeRadios = modal.querySelectorAll('input[name="url-block-type"]');
+    const scheduleInputs = modal.querySelector('#url-schedule-inputs');
+    typeRadios.forEach(r => r.addEventListener('change', () => {
+      scheduleInputs.style.display = r.value === 'scheduled' ? 'block' : 'none';
+    }));
+    
+    modal.querySelector('#url-cancel-btn').onclick = () => modal.remove();
+    
+    modal.querySelector('#url-save-btn').onclick = async () => {
+      modal.querySelector('#url-save-btn').disabled = true;
+      const isSched = modal.querySelector('input[name="url-block-type"]:checked').value === 'scheduled';
+      
+      let sTime = null, eTime = null, days = null, cMsg = null;
+      if (isSched) {
+        sTime = modal.querySelector('#url-start').value;
+        eTime = modal.querySelector('#url-end').value;
+        try { days = JSON.parse(modal.querySelector('#url-days').value); } catch(e) { days = [1,2,3,4,5,6,7]; }
+        cMsg = modal.querySelector('#url-msg').value.trim() || null;
+      }
+      
+      await saveRule(type, val, 'block', null, sTime, eTime, days, cMsg);
+      modal.remove();
+      grid.innerHTML = '';
+      await renderScreenControlDashboard(grid, user);
+    };
   };
   urlCard.querySelectorAll('.del-url-btn').forEach(btn => {
     btn.onclick = () => deleteRule(btn.dataset.id);

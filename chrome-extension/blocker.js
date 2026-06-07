@@ -1,6 +1,19 @@
 // blocker.js - Runs at document_start
 (function() {
 
+function checkSchedule(rule) {
+  if (!rule.start_time || !rule.end_time || !rule.days) return true; // No schedule, always active
+  const now = new Date();
+  const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+  if (!rule.days.includes(currentDay)) return false;
+  const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  if (rule.start_time < rule.end_time) {
+    return (currentTimeStr >= rule.start_time && currentTimeStr < rule.end_time);
+  } else {
+    return (currentTimeStr >= rule.start_time || currentTimeStr < rule.end_time);
+  }
+}
+
 /**
  * Single Truth Function for Rule Evaluation
  * @param {string} currentDomain 
@@ -46,10 +59,11 @@ function shouldBlock(currentDomain, payload, usageObj) {
       if (currentDomain === d || currentDomain.endsWith('.' + d)) {
         const rule = payload.rules.domains[d];
         if (rule.action === 'allow') return null; // whitelist bypass
+        if (!checkSchedule(rule)) continue;
         if (rule.action === 'block' || (rule.action === 'limit' && usage[d] >= rule.limit_mins)) {
           return {
             title: 'Website Blocked',
-            message: payload.messages?.domain_default || 'This specific website has been blocked.'
+            message: rule.message || payload.messages?.domain_default || 'This specific website has been blocked.'
           };
         }
       }
@@ -62,11 +76,13 @@ function shouldBlock(currentDomain, payload, usageObj) {
       const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
       const regex = new RegExp(regexStr);
       if (regex.test(currentDomain)) {
-        if (w.action === 'allow') return null;
-        if (w.action === 'block' || (w.action === 'limit' && usage[w.pattern] >= w.limit_mins)) {
+        const rule = w;
+        if (rule.action === 'allow') return null;
+        if (!checkSchedule(rule)) continue;
+        if (rule.action === 'block' || (rule.action === 'limit' && usage[rule.pattern] >= rule.limit_mins)) {
           return {
             title: 'Website Blocked',
-            message: payload.messages?.domain_default || 'This specific website has been blocked.'
+            message: rule.message || payload.messages?.domain_default || 'This specific website has been blocked.'
           };
         }
       }
@@ -79,10 +95,11 @@ function shouldBlock(currentDomain, payload, usageObj) {
     if (payload.rules.categories && payload.rules.categories[category]) {
       const rule = payload.rules.categories[category];
       if (rule.action === 'allow') return null;
+      if (!checkSchedule(rule)) return null;
       if (rule.action === 'block' || (rule.action === 'limit' && usage['cat_' + category] >= rule.limit_mins)) {
         return {
           title: 'Category Restricted',
-          message: payload.messages?.category_default || 'This app category is restricted right now.'
+          message: rule.message || payload.messages?.category_default || 'This app category is restricted right now.'
         };
       }
     }

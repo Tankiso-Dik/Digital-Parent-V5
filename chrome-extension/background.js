@@ -58,15 +58,46 @@ async function updateDailyUsage() {
   checkLimits(domain, category, daily.usage, data.rules_payload);
 }
 
+function checkSchedule(rule) {
+  if (!rule.start_time || !rule.end_time || !rule.days) return true;
+  const now = new Date();
+  const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+  if (!rule.days.includes(currentDay)) return false;
+  const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+  if (rule.start_time < rule.end_time) {
+    return (currentTimeStr >= rule.start_time && currentTimeStr < rule.end_time);
+  } else {
+    return (currentTimeStr >= rule.start_time || currentTimeStr < rule.end_time);
+  }
+}
+
 function checkLimits(domain, category, usage, payload) {
   if (!payload || !payload.rules) return;
   let block = false;
   
-  if (payload.rules.domains && payload.rules.domains[domain] && payload.rules.domains[domain].action === 'limit') {
-    if (usage[domain] >= payload.rules.domains[domain].limit_mins) block = true;
+  if (payload.rules.domains && payload.rules.domains[domain]) {
+    const r = payload.rules.domains[domain];
+    if (r.action !== 'allow' && checkSchedule(r)) {
+      if (r.action === 'block' || (r.action === 'limit' && usage[domain] >= r.limit_mins)) block = true;
+    }
   }
-  if (category && payload.rules.categories && payload.rules.categories[category] && payload.rules.categories[category].action === 'limit') {
-    if (usage['cat_' + category] >= payload.rules.categories[category].limit_mins) block = true;
+  
+  if (payload.rules.wildcards) {
+    for (const w of payload.rules.wildcards) {
+      const regexStr = '^' + w.pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
+      if (new RegExp(regexStr).test(domain)) {
+        if (w.action !== 'allow' && checkSchedule(w)) {
+          if (w.action === 'block' || (w.action === 'limit' && usage[w.pattern] >= w.limit_mins)) block = true;
+        }
+      }
+    }
+  }
+
+  if (category && payload.rules.categories && payload.rules.categories[category]) {
+    const r = payload.rules.categories[category];
+    if (r.action !== 'allow' && checkSchedule(r)) {
+      if (r.action === 'block' || (r.action === 'limit' && usage['cat_' + category] >= r.limit_mins)) block = true;
+    }
   }
   
   if (payload.curfews && payload.curfews.length > 0) {
