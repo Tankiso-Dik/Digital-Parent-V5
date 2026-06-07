@@ -69,8 +69,12 @@ function familyRoleLabel(role) {
   return t(`settings.familyRole${String(role || 'other').replace(/(^|_)([a-z])/g, (_, __, c) => c.toUpperCase())}`);
 }
 
-function buildFamilyRoleOptions(selected = 'other') {
-  return FAMILY_ROLES.map((role) => `
+function buildFamilyRoleOptions(selected = 'child') {
+  const visibleRoles = ['parent', 'child'];
+  if (selected && !visibleRoles.includes(selected) && FAMILY_ROLES.includes(selected)) {
+    visibleRoles.push(selected);
+  }
+  return visibleRoles.map((role) => `
     <option value="${role}"${role === selected ? ' selected' : ''}>${familyRoleLabel(role)}</option>
   `).join('');
 }
