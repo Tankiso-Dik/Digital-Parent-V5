@@ -26,24 +26,36 @@ export async function render(container, { user }) {
   `;
   wrapper.appendChild(header);
 
+  const loader = document.createElement('div');
+  loader.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i data-lucide="loader" class="spin"></i> Loading analytics...</div>';
+  wrapper.appendChild(loader);
+  if (window.lucide) window.lucide.createIcons({ el: wrapper });
+
   try {
     const [res, rulesRes] = await Promise.all([
       apiFetch('/app-usage/analytics?tz_offset=' + new Date().getTimezoneOffset()),
       apiFetch('/rules/sync')
     ]);
+    loader.remove();
     const { topApps, categoryStats, dailyStats } = res.data;
     const rulesPayload = rulesRes.rules || null;
 
     const getAppBadge = (appName) => {
       if (!rulesPayload || !appName) return '';
       const appNameLower = appName.toLowerCase();
+      
+      const formatBadge = (r) => {
+        if (r.start_time && r.end_time) return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Scheduled: ${r.start_time} - ${r.end_time}</span>`;
+        if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
+        if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
+        return '';
+      };
+
       if (rulesPayload.domains) {
         for (const d of Object.keys(rulesPayload.domains)) {
           const dLower = d.toLowerCase();
           if (appNameLower === dLower || appNameLower.endsWith('.' + dLower)) {
-            const r = rulesPayload.domains[d];
-            if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
-            if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
+            return formatBadge(rulesPayload.domains[d]);
           }
         }
       }
@@ -51,8 +63,7 @@ export async function render(container, { user }) {
         for (const w of rulesPayload.wildcards) {
           const regexStr = '^' + w.pattern.toLowerCase().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
           if (new RegExp(regexStr).test(appNameLower)) {
-            if (w.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
-            if (w.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${w.limit_mins}m</span>`;
+            return formatBadge(w);
           }
         }
       }
@@ -70,10 +81,7 @@ export async function render(container, { user }) {
       
       if (matchedCategory && rulesPayload.categories) {
         const r = rulesPayload.categories[matchedCategory];
-        if (r) {
-          if (r.action === 'block') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 59, 48, 0.1); color: var(--color-danger); padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Blocked</span>`;
-          if (r.action === 'limit') return `<span style="font-size: 10px; font-weight: bold; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px; text-transform: uppercase;">Limit: ${r.limit_mins}m</span>`;
-        }
+        if (r) return formatBadge(r);
       }
       return '';
     };
