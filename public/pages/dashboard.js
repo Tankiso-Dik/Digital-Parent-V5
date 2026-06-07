@@ -128,32 +128,11 @@ async function renderScreenControlDashboard(grid, user) {
   const urlCard = createCard('Manual URL Blocking', 'globe', '#FF3B30');
   grid.appendChild(urlCard);
   
-  const urlRules = rulesData.blocked_rules.filter(r => r.type === 'domain' || r.type === 'wildcard');
-  let urlListHtml = urlRules.map(r => {
-    let badge = '';
-    if (r.start_time && r.end_time) {
-      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Scheduled: ${r.start_time} - ${r.end_time}</span>`;
-    } else if (r.limit_minutes) {
-      badge = `<span style="font-size: 10px; background: rgba(255, 149, 0, 0.1); color: #FF9500; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Limit: ${r.limit_minutes}m</span>`;
-    }
-    return `
-    <div style="display: flex; justify-content: space-between; background: var(--bg-body); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--color-border-subtle);">
-      <div>
-        <span style="font-family: monospace;">${r.value}</span>
-        ${badge}
-      </div>
-      <button class="del-url-btn" data-id="${r.id}" style="background: none; border: none; color: var(--color-danger); cursor: pointer;"><i data-lucide="trash-2" style="width:16px;"></i></button>
-    </div>
-  `}).join('');
-
   urlCard.innerHTML += `
     <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">Precision control for specific websites.</p>
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
       <input type="text" id="new-url-input" class="input" placeholder="e.g. *.discord.com" style="flex: 1;">
-      <button class="btn btn--primary" id="add-url-btn">Block</button>
-    </div>
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-      ${urlListHtml}
+      <button class="btn btn--primary" id="add-url-btn">Configure Block</button>
     </div>
   `;
 
@@ -178,6 +157,14 @@ async function renderScreenControlDashboard(grid, user) {
           </div>
         </label>
         
+        <label style="display: flex; gap: 12px; margin-bottom: 12px; cursor: pointer;">
+          <input type="radio" name="url-block-type" value="limit" style="margin-top: 4px;">
+          <div>
+            <strong>Daily Time Limit</strong>
+            <div style="font-size: 12px; color: var(--text-muted);">Website is allowed for a set amount of time per day.</div>
+          </div>
+        </label>
+        
         <label style="display: flex; gap: 12px; margin-bottom: 16px; cursor: pointer;">
           <input type="radio" name="url-block-type" value="scheduled" style="margin-top: 4px;">
           <div>
@@ -186,6 +173,11 @@ async function renderScreenControlDashboard(grid, user) {
           </div>
         </label>
         
+        <div id="url-limit-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+          <label style="font-size: 12px; color: var(--text-muted);">Daily Limit (Minutes)</label>
+          <input type="number" id="url-limit-mins" class="input" style="width: 100%; margin-top: 4px;" value="60">
+        </div>
+
         <div id="url-schedule-inputs" style="display: none; background: var(--bg-body); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
           <div style="display: flex; gap: 8px; margin-bottom: 8px;">
             <div style="flex: 1;"><label style="font-size: 12px; color: var(--text-muted);">Start Time</label><input type="time" id="url-start" class="input" style="width:100%;" value="15:00"></div>
@@ -215,8 +207,10 @@ async function renderScreenControlDashboard(grid, user) {
     
     const typeRadios = modal.querySelectorAll('input[name="url-block-type"]');
     const scheduleInputs = modal.querySelector('#url-schedule-inputs');
+    const limitInputs = modal.querySelector('#url-limit-inputs');
     typeRadios.forEach(r => r.addEventListener('change', () => {
       scheduleInputs.style.display = r.value === 'scheduled' ? 'block' : 'none';
+      limitInputs.style.display = r.value === 'limit' ? 'block' : 'none';
     }));
 
     const presetSelect = modal.querySelector('#url-preset-msgs');
@@ -231,17 +225,20 @@ async function renderScreenControlDashboard(grid, user) {
     
     modal.querySelector('#url-save-btn').onclick = async () => {
       modal.querySelector('#url-save-btn').disabled = true;
-      const isSched = modal.querySelector('input[name="url-block-type"]:checked').value === 'scheduled';
+      const blockType = modal.querySelector('input[name="url-block-type"]:checked').value;
       
-      let sTime = null, eTime = null, days = null, cMsg = null;
-      if (isSched) {
+      let sTime = null, eTime = null, days = null, cMsg = null, limitMins = null, action = 'block';
+      if (blockType === 'scheduled') {
         sTime = modal.querySelector('#url-start').value;
         eTime = modal.querySelector('#url-end').value;
         try { days = JSON.parse(modal.querySelector('#url-days').value); } catch(e) { days = [1,2,3,4,5,6,7]; }
         cMsg = modal.querySelector('#url-msg').value.trim() || null;
+      } else if (blockType === 'limit') {
+        action = 'limit';
+        limitMins = parseInt(modal.querySelector('#url-limit-mins').value, 10) || 60;
       }
       
-      await saveRule(type, val, 'block', null, sTime, eTime, days, cMsg);
+      await saveRule(type, val, action, limitMins, sTime, eTime, days, cMsg);
       modal.remove();
       grid.innerHTML = '';
       await renderScreenControlDashboard(grid, user);
