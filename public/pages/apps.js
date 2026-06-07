@@ -28,11 +28,11 @@ export async function render(container, { user }) {
 
   try {
     const [res, rulesRes] = await Promise.all([
-      apiFetch('/app-usage/analytics'),
+      apiFetch('/app-usage/analytics?tz_offset=' + new Date().getTimezoneOffset()),
       apiFetch('/rules/sync')
     ]);
     const { topApps, categoryStats, dailyStats } = res.data;
-    const rulesPayload = rulesRes.data?.rules || null;
+    const rulesPayload = rulesRes.rules || null;
 
     const getAppBadge = (appName) => {
       if (!rulesPayload || !appName) return '';
@@ -58,8 +58,8 @@ export async function render(container, { user }) {
       }
       
       let matchedCategory = null;
-      if (rulesRes.data?.category_map) {
-         for (const [domain, cat] of Object.entries(rulesRes.data.category_map)) {
+      if (rulesRes.category_map) {
+         for (const [domain, cat] of Object.entries(rulesRes.category_map)) {
            const dLower = domain.toLowerCase();
            if (appNameLower === dLower || appNameLower.endsWith('.' + dLower)) {
              matchedCategory = cat;
@@ -78,8 +78,9 @@ export async function render(container, { user }) {
       return '';
     };
 
-    // Calculate total today (using first item in dailyStats if it matches today)
-    const today = new Date().toISOString().slice(0, 10);
+    // Calculate total today (using local timezone date)
+    const offsetMs = new Date().getTimezoneOffset() * 60000;
+    const today = new Date(Date.now() - offsetMs).toISOString().slice(0, 10);
     const todayData = dailyStats.find(d => d.log_date === today);
     const totalTodaySeconds = todayData ? todayData.total_duration : 0;
 

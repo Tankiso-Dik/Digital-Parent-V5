@@ -67,10 +67,23 @@ router.post('/logs', (req, res) => {
     let app_name = app_identifier.replace(/^www\./, '').replace(/^m\./, '');
     
     // Categorization logic migrated from Extension to Backend
+    const appLower = app_name.toLowerCase();
     let category_id = 6; // Default to 'Other'
-    if (app_name.includes('youtube') || app_name.includes('tiktok') || app_name.includes('instagram')) category_id = 1; // Social
-    else if (app_name.includes('roblox') || app_name.includes('minecraft')) category_id = 2; // Gaming
-    else if (app_name.includes('khanacademy') || app_name.includes('wikipedia')) category_id = 3; // Education
+
+    const categories = {
+      1: ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter', 'x.com', 'snapchat', 'reddit', 'pinterest', 'linkedin', 'tumblr', 'weibo', 'quora', 'vimeo', 'bereal', 'threads'],
+      2: ['roblox', 'minecraft', 'twitch', 'steam', 'epicgames', 'miniclip', 'coolmathgames', 'ign', 'ea.com', 'ubisoft', 'blizzard', 'xbox', 'playstation', 'nintendo', 'crazygames', 'poki', 'chess.com', 'fortnite', 'leagueoflegends'],
+      3: ['khanacademy', 'wikipedia', 'duolingo', 'coursera', 'quizlet', 'brainly', 'scholastic', 'blackboard', 'canvas', 'edx', 'udemy', 'codecademy', 'skillshare', 'babbel', 'ixl', 'clever', 'classroom.google', 'kahoot', 'mathletics'],
+      4: ['netflix', 'hulu', 'disneyplus', 'primevideo', 'spotify', 'apple.com', 'hbomax', 'max.com', 'peacock', 'paramountplus', 'crunchyroll', 'soundcloud', 'pandora', 'amazon.com', 'imdb', 'fandom', 'tvtropes', 'hbo', 'showtime'],
+      5: ['whatsapp', 'telegram', 'discord', 'skype', 'zoom', 'teams', 'slack', 'messenger', 'signal', 'viber', 'line', 'wechat', 'meet.google', 'webex', 'groupme', 'gmail', 'outlook', 'yahoo']
+    };
+
+    for (const [catId, keywords] of Object.entries(categories)) {
+      if (keywords.some(kw => appLower.includes(kw))) {
+        category_id = parseInt(catId, 10);
+        break;
+      }
+    }
     
     // Look up real ID from database if name mapping changes later
     // For now we trust the hardcoded 1, 2, 3 mapped to the initial seed
@@ -124,14 +137,17 @@ router.get('/analytics', (req, res) => {
       ORDER BY total_duration DESC
     `).all();
 
+    const tzOffset = parseInt(req.query.tz_offset) || 0;
+    const modifier = `${-tzOffset} minutes`;
+
     // Daily totals (last 7 days)
     const dailyStats = db.get().prepare(`
-      SELECT date(start_time) as log_date, SUM(duration) as total_duration
+      SELECT date(start_time, ?) as log_date, SUM(duration) as total_duration
       FROM app_usage_logs
       GROUP BY log_date
       ORDER BY log_date DESC
       LIMIT 7
-    `).all();
+    `).all(modifier);
 
     res.json({ data: { topApps, categoryStats, dailyStats } });
   } catch (err) {
